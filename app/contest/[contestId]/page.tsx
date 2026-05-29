@@ -847,13 +847,13 @@ export default function ContestPage() {
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-widest text-neutral-500">
-                            Problem {String.fromCharCode(65 + Math.max(0, index))}
-                          </p>
-                          <h3 className="text-lg font-bold mt-1">{problem.title}</h3>
+                          {/* <p className="text-xs uppercase tracking-widest text-neutral-500">
+                            Problem
+                          </p> */}
+                          <h3 className="text-lg font-bold mt-1"> {String.fromCharCode(65 + Math.max(0, index))}. {problem.title}</h3>
                           <p className="text-sm text-neutral-400 mt-1">
-                            {contest.settings.showRatings && problem.rating ? `Rating ${problem.rating}` : "Rating hidden"}
-                            <span className="px-2">·</span>
+                            {contest.settings.showRatings && problem.rating ? `Rating ${problem.rating} ${<span className="px-2">·</span>}` : ""}
+                            
                             {problem.oj}
                           </p>
                           {contest.settings.showRatings && problem.tags.length > 0 && (
