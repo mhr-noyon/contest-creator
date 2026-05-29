@@ -88,4 +88,15 @@ export const codeforcesProvider: OJProviderInterface = {
         submittedAt: submission.creationTimeSeconds * 1000,
       }));
   },
+  async verifyHandle(handle: string): Promise<boolean> {
+    try {
+      const url = `https://codeforces.com/api/user.info?handles=${encodeURIComponent(handle)}`;
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) return false;
+      const data = await res.json();
+      return data.status === "OK";
+    } catch {
+      return false;
+    }
+  },
 };

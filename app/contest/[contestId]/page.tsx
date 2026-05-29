@@ -68,12 +68,20 @@ export default function ContestPage() {
   };
 
   const handleBackHomeClick = (e: React.MouseEvent) => {
+    const isParticipant = isOwner || Boolean(selfParticipant);
+    const isFinished = contest?.status === "finished";
+
+    if (!isParticipant || isFinished) {
+      window.location.href = "/contest";
+      return;
+    }
+
     e.preventDefault();
     setShowLeaveModal(true);
   };
 
   const handleLeaveContest = () => {
-    window.location.href = "/";
+    window.location.href = "/contest";
   };
 
   const buttonPillClass =
@@ -246,6 +254,13 @@ export default function ContestPage() {
     const interval = setInterval(fetchContest, refreshIntervalMs);
     return () => clearInterval(interval);
   }, [contestId, ownerSnapshotName, joinName]);
+
+  // Auto authorize if contest does not require password
+  useEffect(() => {
+    if (contest && !contest.settings.requirePassword) {
+      setAuthorized(true);
+    }
+  }, [contest]);
 
   useEffect(() => {
     if (!contestId || contest?.status !== "running") return;
@@ -700,7 +715,7 @@ export default function ContestPage() {
               <div className="space-y-2">
                 <h3 className="text-xl font-bold text-white">Leave Contest?</h3>
                 <p className="text-sm text-neutral-400 leading-relaxed">
-                  You may lose access to this contest link. Are you sure you want to leave the page? You can copy the contest link before leaving.
+                  Are you sure you want to leave the page? You can copy the contest link before leaving.
                 </p>
               </div>
               
@@ -741,9 +756,14 @@ export default function ContestPage() {
       <div className="max-w-6xl mx-auto space-y-8">
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div>
-            <button onClick={handleBackHomeClick} className="text-sm text-neutral-400 hover:text-white transition-colors cursor-pointer">← Back home</button>
-            <h1 className="text-4xl font-extrabold mt-3">{contest.settings.title}</h1>
-            <p className="text-neutral-400 mt-2 max-w-2xl">{contest.settings.description}</p>
+            <button onClick={handleBackHomeClick} className="text-sm text-neutral-400 hover:text-white transition-colors cursor-pointer">← Back</button>
+            <h1 className="text-2xl font-extrabold mt-3">{contest.settings.title}</h1>
+            {(!isOwner && !selfParticipant) && (
+              <div className="rounded-2xl border border-blue-500/30 bg-blue-500/10 mt-3 px-5 py-3 text-blue-200 text-sm font-semibold flex items-center gap-2">
+                <span>📢</span>
+                <span>You have joined as a visitor.</span>
+              </div>
+            )}
             <nav className="mt-4 flex flex-wrap gap-2">
               <button 
                 onClick={() => handleTabChange("problems")} 
@@ -827,13 +847,13 @@ export default function ContestPage() {
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <p className="text-xs uppercase tracking-widest text-neutral-500">
-                            Problem {String.fromCharCode(65 + Math.max(0, index))}
-                          </p>
-                          <h3 className="text-lg font-bold mt-1">{problem.title}</h3>
+                          {/* <p className="text-xs uppercase tracking-widest text-neutral-500">
+                            Problem
+                          </p> */}
+                          <h3 className="text-lg font-bold mt-1"> {String.fromCharCode(65 + Math.max(0, index))}. {problem.title}</h3>
                           <p className="text-sm text-neutral-400 mt-1">
-                            {contest.settings.showRatings && problem.rating ? `Rating ${problem.rating}` : "Rating hidden"}
-                            <span className="px-2">·</span>
+                            {contest.settings.showRatings && problem.rating ? `Rating ${problem.rating} ${<span className="px-2">·</span>}` : ""}
+                            
                             {problem.oj}
                           </p>
                           {contest.settings.showRatings && problem.tags.length > 0 && (
@@ -843,7 +863,7 @@ export default function ContestPage() {
                           )}
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-semibold text-emerald-200">{problem.points} pts</p>
+                          {problem.points > 0 && <p className="text-sm font-semibold text-emerald-200">{problem.points} pts</p>}
                           {solved && <p className="text-xs text-emerald-200 mt-2">Solved</p>}
                           {!solved && incorrect && <p className="text-xs text-red-300 mt-2">Attempted</p>}
                           {contest.settings.mode === "blitz" && problem.id === activeProblemId && (
@@ -901,55 +921,65 @@ export default function ContestPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {scoreboard.entries.map((entry, index) => (
-                        <tr key={entry.participantId} className="border-t border-white/10 hover:bg-white/5 transition-colors">
-                          <td className="py-4 px-4 font-mono text-neutral-300">{index + 1}</td>
-                          <td className="py-4 px-4 font-semibold text-white whitespace-nowrap">{entry.displayName}</td>
-                          <td className="py-4 px-4 text-center text-neutral-300 font-semibold">{entry.solvedCount}</td>
-                          {contest.settings.rules.rankingType === "score" ? (
-                            <td className="py-4 px-4 text-center text-emerald-200 font-semibold">{entry.totalScore}</td>
-                          ) : (
-                            <td className="py-4 px-4 text-center text-neutral-300 font-mono">{entry.penaltyMinutes}</td>
-                          )}
-                          {contest.problems.map((problem) => {
-                            const state = entry.problems[problem.id];
-                            const attempts = state?.attempts ?? 0;
-                            const solved = Boolean(state?.solved);
-                            const solveMinutes = state?.solveTimeSeconds ? Math.floor(state.solveTimeSeconds / 60) : null;
-                            
-                            const cellBg = solved 
-                              ? "bg-emerald-500/10" 
-                              : attempts > 0 
-                                ? "bg-red-500/10" 
-                                : "bg-white/5";
+                      {scoreboard.entries.map((entry, index) => {
+                        const isSelf = (lockedName || joinName || (isOwner ? contest.ownerName : "")).trim().toLowerCase() === entry.displayName.toLowerCase();
+                        return (
+                          <tr 
+                            key={entry.participantId} 
+                            className={`border-t border-white/10 hover:bg-white/5 transition-colors ${
+                              isSelf 
+                                ? "bg-[oklch(22%_0.005_106.5)] border-l-2 border-l-emerald-400 font-bold" 
+                                : ""
+                            }`}
+                          >
+                            <td className="py-4 px-4 font-mono text-neutral-300">{index + 1}</td>
+                            <td className="py-4 px-4 font-semibold text-white whitespace-nowrap">{entry.displayName} {isSelf ? "(You)" : ""}</td>
+                            <td className="py-4 px-4 text-center text-neutral-300 font-semibold">{entry.solvedCount}</td>
+                            {contest.settings.rules.rankingType === "score" ? (
+                              <td className="py-4 px-4 text-center text-emerald-200 font-semibold">{entry.totalScore}</td>
+                            ) : (
+                              <td className="py-4 px-4 text-center text-neutral-300 font-mono">{entry.penaltyMinutes}</td>
+                            )}
+                            {contest.problems.map((problem) => {
+                              const state = entry.problems[problem.id];
+                              const attempts = state?.attempts ?? 0;
+                              const solved = Boolean(state?.solved);
+                              const solveMinutes = state?.solveTimeSeconds ? Math.floor(state.solveTimeSeconds / 60) : null;
+                              
+                              const cellBg = solved 
+                                ? "bg-emerald-500/10" 
+                                : attempts > 0 
+                                  ? "bg-red-500/10" 
+                                  : "bg-white/5";
 
-                            return (
-                              <td 
-                                key={`${entry.participantId}-${problem.id}`} 
-                                className={`py-4 px-4 text-center text-xs border-l border-white/5 ${cellBg} min-w-[100px]`}
-                              >
-                                {contest.settings.rules.rankingType === "score" ? (
-                                  <div className="space-y-1">
-                                    <p className={solved ? "text-emerald-300 font-bold" : "text-neutral-400"}>
-                                      {solved ? problem.points : 0}
-                                    </p>
-                                    <p className="text-[10px] text-neutral-500">{attempts} att</p>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-1">
-                                    <p className={solved ? "text-emerald-300 font-bold" : attempts ? "text-red-400" : "text-neutral-500"}>
-                                      {solved ? `+${attempts}` : attempts ? `-${attempts}` : ""}
-                                    </p>
-                                    {solved && solveMinutes !== null && (
-                                      <p className="text-[10px] text-neutral-500">{solveMinutes}m</p>
-                                    )}
-                                  </div>
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
+                              return (
+                                <td 
+                                  key={`${entry.participantId}-${problem.id}`} 
+                                  className={`py-4 px-4 text-center text-xs border-l border-white/5 ${cellBg} min-w-[100px]`}
+                                >
+                                  {contest.settings.rules.rankingType === "score" ? (
+                                    <div className="space-y-1">
+                                      <p className={solved ? "text-emerald-300 font-bold" : "text-neutral-400"}>
+                                        {solved ? problem.points : 0}
+                                      </p>
+                                      <p className="text-[10px] text-neutral-500">{attempts} att</p>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      <p className={solved ? "text-emerald-300 font-bold" : attempts ? "text-red-400" : "text-neutral-500"}>
+                                        {solved ? `+${attempts}` : attempts ? `-${attempts}` : ""}
+                                      </p>
+                                      {solved && solveMinutes !== null && (
+                                        <p className="text-[10px] text-neutral-500">{solveMinutes}m</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                   {scoreboard.frozen && (
@@ -1060,7 +1090,32 @@ export default function ContestPage() {
               <h2 className="text-xl font-bold">Joined participants</h2>
               <div className="space-y-3">
                 {/* Host */}
-                <div className="rounded-2xl border border-white/10 bg-black/60 p-4">
+                {(() => {
+                  const isHostYou =
+                    selfParticipant?.displayName?.toLowerCase() === contest.ownerName?.toLowerCase();
+
+                  return (
+                    <div className="rounded-2xl border border-white/10 bg-black/60 p-4">
+                      <p className="text-sm font-semibold text-white">
+                        {contest.ownerName}
+                        {isHostYou && (
+                          " (you)"
+                        )}
+                        <span className="ml-2 text-xs text-emerald-300 font-normal px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                          Host
+                        </span>
+                      </p>
+
+                      <div className="mt-2 space-y-1 text-xs text-neutral-400">
+                        {contest.handles.map((h, idx) => (
+                          <p key={`info-host-${idx}`}>• {h.oj}: {h.handle}</p>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+                {/* Host */}
+                {/* <div className="rounded-2xl border border-white/10 bg-black/60 p-4">
                   <p className="text-sm font-semibold text-white">
                     {contest.ownerName} <span className="text-xs text-emerald-300 font-normal px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 ml-2">Host</span>
                   </p>
@@ -1069,7 +1124,7 @@ export default function ContestPage() {
                       <p key={`info-host-${idx}`}>• {h.oj}: {h.handle}</p>
                     ))}
                   </div>
-                </div>
+                </div> */}
 
                 {/* Others */}
                 {contest.participants
@@ -1112,7 +1167,7 @@ export default function ContestPage() {
             <div className="space-y-2">
               <h3 className="text-xl font-bold text-white">Leave Contest?</h3>
               <p className="text-sm text-neutral-400 leading-relaxed">
-                You may lose access to this contest link. Are you sure you want to leave the page? You can copy the contest link before leaving.
+                Are you sure you want to leave the page? You can copy the contest link before leaving.
               </p>
             </div>
             

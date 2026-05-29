@@ -2,7 +2,7 @@ import { getProvider } from "@/lib/contest/providers";
 import { ContestProblem, ContestSettings, ContestHandle, DifficultyRange, OJName } from "@/lib/contest/types";
 import { clamp } from "@/lib/contest/utils";
 
-const DEFAULT_POINTS = 100;
+const DEFAULT_POINTS = 0;
 
 function normalizeRange(range: DifficultyRange): DifficultyRange {
   return {

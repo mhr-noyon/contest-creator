@@ -28,18 +28,24 @@ export default function Home() {
               live tracking, and ICPC-style rankings. Built for speed, hosted on Vercel.
             </p>
 
-            <div className="mt-8 flex flex-col sm:flex-row gap-4">
+            <div className="mt-8 flex flex-col sm:flex-row flex-wrap gap-4">
               <Link
                 href="/create"
-                className="px-6 py-4 rounded-2xl bg-white text-black font-bold text-lg shadow-[0_12px_40px_-20px_rgba(255,255,255,0.7)] hover:-translate-y-0.5 transition-transform"
+                className="px-6 py-4 rounded-2xl bg-white text-black font-bold text-lg shadow-[0_12px_40px_-20px_rgba(255,255,255,0.7)] hover:-translate-y-0.5 transition-transform text-center"
               >
                 Start a Duel
               </Link>
               <Link
-                href="/contest/create"
-                className="px-6 py-4 rounded-2xl border border-white/20 bg-white/5 text-white font-bold text-lg hover:border-emerald-300/60 hover:text-emerald-200 transition-colors"
+                href="/contest"
+                className="px-6 py-4 rounded-2xl border border-emerald-400 bg-emerald-500/10 text-emerald-200 font-bold text-lg hover:-translate-y-0.5 hover:bg-emerald-500/20 transition-all text-center"
               >
-                Generate Virtual Contest
+                Join Virtual Contest
+              </Link>
+              <Link
+                href="/contest/create"
+                className="px-6 py-4 rounded-2xl border border-white/20 bg-white/5 text-white font-bold text-lg hover:border-emerald-300/60 hover:text-emerald-200 transition-colors text-center"
+              >
+                Generate Contest
               </Link>
             </div>
 
@@ -68,18 +74,13 @@ export default function Home() {
               <div className="mt-6 space-y-4">
                 <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
                   <p className="text-xs uppercase text-neutral-400 tracking-widest">Problems</p>
-                  <p className="text-2xl font-bold text-white">6 curated tasks</p>
+                  <p className="text-2xl font-bold text-white">'N' curated tasks</p>
                   <p className="text-sm text-neutral-400">CF • AtCoder • CodeChef</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
                   <p className="text-xs uppercase text-neutral-400 tracking-widest">Mode</p>
-                  <p className="text-2xl font-bold text-white">Blitz progression</p>
+                  <p className="text-2xl font-bold text-white">Blitz progression or Standard</p>
                   <p className="text-sm text-neutral-400">Auto-unlock on first solve</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
-                  <p className="text-xs uppercase text-neutral-400 tracking-widest">Tracking</p>
-                  <p className="text-2xl font-bold text-white">Cron + polling</p>
-                  <p className="text-sm text-neutral-400">Vercel-safe updates</p>
                 </div>
               </div>
             </div>

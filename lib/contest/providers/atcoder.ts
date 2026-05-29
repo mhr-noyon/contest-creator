@@ -96,4 +96,13 @@ export const atcoderProvider: OJProviderInterface = {
       submittedAt: submission.epoch_second * 1000,
     }));
   },
+  async verifyHandle(handle: string): Promise<boolean> {
+    try {
+      const url = `https://atcoder.jp/users/${encodeURIComponent(handle)}`;
+      const res = await fetch(url, { cache: "no-store" });
+      return res.status === 200;
+    } catch {
+      return false;
+    }
+  },
 };

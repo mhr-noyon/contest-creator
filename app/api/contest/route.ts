@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Contest, ContestHandle, ContestSettings } from "@/lib/contest/types";
 import { generateContestId, createSalt, hashPassword } from "@/lib/contest/utils";
 import { getContest, setContest } from "@/lib/contest/store";
+import { getProvider } from "@/lib/contest/providers";
 
 function normalizeHandles(input: any): ContestHandle[] {
   if (!Array.isArray(input)) return [];
@@ -40,7 +41,7 @@ function normalizeSettings(input: any): ContestSettings {
     numberOfProblems: Number(input?.numberOfProblems || 5),
     difficulty: {
       mode: input?.difficulty?.mode === "per-problem" ? "per-problem" : "global",
-      global: input?.difficulty?.global || { min: 800, max: 2000 },
+      global: input?.difficulty?.global || { min: 800, max: 1600 },
       perProblem: Array.isArray(input?.difficulty?.perProblem) ? input.difficulty.perProblem : null,
     },
     problemScores: Array.isArray(input?.problemScores) ? input.problemScores : null,
@@ -72,6 +73,23 @@ export async function POST(request: Request) {
 
     if (handles.length === 0) {
       return NextResponse.json({ error: "At least one handle is required." }, { status: 400 });
+    }
+
+    // Verify host handles on their respective OJs
+    const verificationResults = await Promise.all(
+      handles.map(async (h) => {
+        const provider = getProvider(h.oj);
+        const exists = await provider.verifyHandle(h.handle);
+        return { handle: h.handle, oj: h.oj, exists };
+      })
+    );
+
+    const invalid = verificationResults.find((r) => !r.exists);
+    if (invalid) {
+      return NextResponse.json(
+        { error: `Handle "${invalid.handle}" not found on ${invalid.oj}. Please check and try again.` },
+        { status: 400 }
+      );
     }
 
     const contestId = await createUniqueContestId();

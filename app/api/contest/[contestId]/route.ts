@@ -3,6 +3,7 @@ import { getContest, setContest } from "@/lib/contest/store";
 import { hashPassword } from "@/lib/contest/utils";
 import { Contest, ContestHandle, ContestParticipant } from "@/lib/contest/types";
 import { generateProblemSet } from "@/lib/contest/generator";
+import { getProvider } from "@/lib/contest/providers";
 
 function normalizeHandles(input: any): ContestHandle[] {
   if (!Array.isArray(input)) return [];
@@ -97,6 +98,54 @@ export async function POST(
 
     if (missing.length > 0) {
       return NextResponse.json({ error: "Handles for all contest judges are required." }, { status: 400 });
+    }
+
+    // Check if any of the handles are already taken by another participant or the host
+    for (const h of handles) {
+      const isHost = displayName.toLowerCase() === contest.ownerName.toLowerCase();
+      if (!isHost) {
+        const hostHasIt = contest.handles.some(
+          (hostH) => hostH.oj === h.oj && hostH.handle.toLowerCase() === h.handle.toLowerCase()
+        );
+        if (hostHasIt) {
+          return NextResponse.json(
+            { error: `Handle "${h.handle}" on ${h.oj} is already taken by the host.` },
+            { status: 400 }
+          );
+        }
+      }
+
+      for (const p of contest.participants) {
+        if (p.displayName.toLowerCase() === displayName.toLowerCase()) {
+          continue;
+        }
+        const someoneHasIt = p.handles.some(
+          (otherH) => otherH.oj === h.oj && otherH.handle.toLowerCase() === h.handle.toLowerCase()
+        );
+        if (someoneHasIt) {
+          return NextResponse.json(
+            { error: `Handle "${h.handle}" on ${h.oj} is already taken by another participant (${p.displayName}).` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // Verify participant handles on their respective OJs
+    const verificationResults = await Promise.all(
+      handles.map(async (h) => {
+        const provider = getProvider(h.oj);
+        const exists = await provider.verifyHandle(h.handle);
+        return { handle: h.handle, oj: h.oj, exists };
+      })
+    );
+
+    const invalid = verificationResults.find((r) => !r.exists);
+    if (invalid) {
+      return NextResponse.json(
+        { error: `Handle "${invalid.handle}" not found on ${invalid.oj}. Please check and try again.` },
+        { status: 400 }
+      );
     }
 
     const existing = contest.participants.find(

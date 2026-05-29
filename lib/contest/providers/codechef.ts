@@ -94,4 +94,13 @@ export const codechefProvider: OJProviderInterface = {
         submittedAt: new Date(submission.date).getTime(),
       }));
   },
+  async verifyHandle(handle: string): Promise<boolean> {
+    try {
+      const url = `https://www.codechef.com/users/${encodeURIComponent(handle)}`;
+      const res = await fetch(url, { cache: "no-store" });
+      return res.status === 200;
+    } catch {
+      return false;
+    }
+  },
 };

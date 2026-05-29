@@ -43,11 +43,11 @@ export default function ContestCreatePage() {
   const [title, setTitle] = useState("Custom Virtual Contest");
   const [description, setDescription] = useState("");
   const [durationMinutes, setDurationMinutes] = useState<number | string>(120);
-  const [numberOfProblems, setNumberOfProblems] = useState<number | string>(6);
+  const [numberOfProblems, setNumberOfProblems] = useState<number | string>(5);
   const [mode, setMode] = useState<"standard" | "blitz">("standard");
 
   const [difficultyMode, setDifficultyMode] = useState<"global" | "per-problem">("global");
-  const [globalDifficulty, setGlobalDifficulty] = useState<DifficultyRange>({ min: 800, max: 2000 });
+  const [globalDifficulty, setGlobalDifficulty] = useState<DifficultyRange>({ min: 800, max: 1600 });
   const [perProblemRanges, setPerProblemRanges] = useState<DifficultyRange[]>([
     { min: 800, max: 1000 },
     { min: 1100, max: 1300 },

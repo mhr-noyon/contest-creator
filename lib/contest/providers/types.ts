@@ -20,4 +20,5 @@ export type OJProviderInterface = {
   name: OJName;
   fetchProblems(filter: ProblemFilter): Promise<OJProblem[]>;
   fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number): Promise<ContestSubmission[]>;
+  verifyHandle(handle: string): Promise<boolean>;
 };
