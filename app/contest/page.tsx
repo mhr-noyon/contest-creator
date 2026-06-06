@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Contest } from "@/lib/contest/types";
+import Navbar from "@/components/Navbar";
 
 export default function ContestsListPage() {
   const [contests, setContests] = useState<Contest[]>([]);
@@ -29,7 +30,9 @@ export default function ContestsListPage() {
   const completedContests = contests.filter((c) => c.status === "finished");
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-white px-6 py-12 relative overflow-hidden">
+    <>
+      <Navbar />
+      <main className="min-h-screen bg-neutral-950 text-white px-6 py-12 relative overflow-hidden">
       {/* Decorative gradient backgrounds */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute -top-24 left-1/2 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-emerald-500/10 blur-[140px]" />
@@ -199,5 +202,6 @@ export default function ContestsListPage() {
         )}
       </div>
     </main>
+    </>
   );
 }

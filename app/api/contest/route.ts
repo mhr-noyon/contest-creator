@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Contest, ContestHandle, ContestSettings } from "@/lib/contest/types";
 import { generateContestId, createSalt, hashPassword } from "@/lib/contest/utils";
-import { getContest, setContest } from "@/lib/contest/store";
+import { getContest, setContest, getContestsByTitle, getNextDefaultTitle } from "@/lib/contest/store";
 import { getProvider } from "@/lib/contest/providers";
 
 function normalizeHandles(input: any): ContestHandle[] {
@@ -33,7 +33,7 @@ function normalizeSettings(input: any): ContestSettings {
   };
 
   return {
-    title: String(input?.title || "Custom Virtual Contest").trim(),
+    title: String(input?.title || "").trim(),
     description: String(input?.description || "").trim(),
     durationMinutes: Number(input?.durationMinutes || 120),
     startTime: null,
@@ -74,6 +74,17 @@ export async function POST(request: Request) {
     if (handles.length === 0) {
       return NextResponse.json({ error: "At least one handle is required." }, { status: 400 });
     }
+
+    let finalTitle = settings.title;
+    if (!finalTitle) {
+      finalTitle = await getNextDefaultTitle();
+    } else {
+      const taken = await getContestsByTitle(finalTitle);
+      if (taken) {
+        return NextResponse.json({ error: `A contest with the title "${finalTitle}" already exists.` }, { status: 400 });
+      }
+    }
+    settings.title = finalTitle;
 
     // Verify host handles on their respective OJs
     const verificationResults = await Promise.all(

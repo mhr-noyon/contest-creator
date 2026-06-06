@@ -69,3 +69,32 @@ export async function removeActiveContest(id: string): Promise<void> {
   }
   localActiveSet.delete(id);
 }
+
+export async function getContestsByTitle(title: string): Promise<boolean> {
+  const ids = await listActiveContests();
+  for (const id of ids) {
+    const c = await getContest(id);
+    if (c && c.settings.title.toLowerCase() === title.trim().toLowerCase()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export async function getNextDefaultTitle(): Promise<string> {
+  const ids = await listActiveContests();
+  let maxNum = 0;
+  for (const id of ids) {
+    const c = await getContest(id);
+    if (c) {
+      const match = c.settings.title.match(/^Custom Virtual Contest #(\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1]);
+        if (num > maxNum) {
+          maxNum = num;
+        }
+      }
+    }
+  }
+  return `Custom Virtual Contest #${maxNum + 1}`;
+}
