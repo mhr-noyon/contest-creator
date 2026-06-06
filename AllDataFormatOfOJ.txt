@@ -1,0 +1,131 @@
+CF submission format:
+https://codeforces.com/api/user.status?handle=lostBit&from=1&count=200
+{
+  "status": "OK",
+  "result": [
+    {
+      "id": 377470961,
+      "contestId": 740,
+      "creationTimeSeconds": 1780731565,
+      "relativeTimeSeconds": 2147483647,
+      "problem": {
+        "contestId": 740,
+        "index": "A",
+        "name": "Alyona and copybooks",
+        "type": "PROGRAMMING",
+        "points": 500,
+        "rating": 1300,
+        "tags": [
+          "brute force",
+          "implementation"
+        ]
+      },
+      "author": {
+        "contestId": 740,
+        "participantId": 233445442,
+        "members": [
+          {
+            "handle": "lostBit"
+          }
+        ],
+        "participantType": "PRACTICE",
+        "ghost": false,
+        "startTimeSeconds": 1479918900
+      },
+      "programmingLanguage": "C++23 (GCC 14-64, msys2)",
+      "verdict": "OK",
+      "testset": "TESTS",
+      "passedTestCount": 89,
+      "timeConsumedMillis": 62,
+      "memoryConsumedBytes": 102400
+    }
+  ]
+}
+
+Atcoder submission format:
+https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions?user=noyon29&from_second=102130
+[
+  {
+    "id": 35564177,
+    "epoch_second": 1665386628,
+    "problem_id": "abc071_b",
+    "contest_id": "abc071",
+    "user_id": "noyon29",
+    "language": "C (Clang 10.0.0)",
+    "point": 0,
+    "length": 807,
+    "result": "WA",
+    "execution_time": 4
+  }
+]
+
+
+
+
+
+
+
+
+
+Problem format:
+Atcoder:
+[
+  {
+    "id": "1202Contest_a",
+    "contest_id": "DEGwer2023",
+    "problem_index": "A",
+    "name": "DEGwer's Doctoral Dissertation",
+    "title": "A. DEGwer's Doctoral Dissertation",
+    "shortest_submission_id": 48630759,
+    "shortest_contest_id": "DEGwer2023",
+    "shortest_user_id": "miztom",
+    "fastest_submission_id": 48223627,
+    "fastest_contest_id": "DEGwer2023",
+    "fastest_user_id": "KKT89",
+    "first_submission_id": 48084477,
+    "first_contest_id": "DEGwer2023",
+    "first_user_id": "keisuke6",
+    "source_code_length": 92,
+    "execution_time": 4,
+    "point": null,
+    "solver_count": 661
+  }
+]
+Atcoder problem models:
+{
+  "abc138_a": {
+    "slope": -0.000716860875955505,
+    "intercept": 5.8651009608382,
+    "variance": 0.926552668651041,
+    "difficulty": -848,
+    "discrimination": 0.00447939867307014,
+    "irt_loglikelihood": -260.541232438049,
+    "irt_users": 4554,
+    "is_experimental": false
+  }
+}
+
+
+
+
+Codeforces Problem format:
+{
+  "status": "OK",
+  "result": {
+    "problems": [
+      {
+        "contestId": 2232,
+        "index": "F",
+        "name": "The Cake Is a Lie",
+        "type": "PROGRAMMING",
+        "points": 3250,
+        "rating": 3000,
+        "tags": [
+          "greedy",
+          "math",
+          "number theory"
+        ]
+      }
+    ]
+  }
+}

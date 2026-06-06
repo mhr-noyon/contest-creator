@@ -9,6 +9,7 @@ function normalizeProblemId(contestId: number | string, index: string): string {
 }
 
 function mapCFVerdict(verdict?: string): "OK" | "WA" | "TLE" | "MLE" | "RE" | "CE" | "OTHER" {
+  console.log("mapCFVerdict verdict", verdict);
   if (!verdict) return "OTHER";
   switch (verdict) {
     case "OK": return "OK";
@@ -67,6 +68,10 @@ export const codeforcesProvider: OJProviderInterface = {
     const url = `${CF_SUBMISSION_URL}?handle=${encodeURIComponent(handle)}&from=1&count=200`;
     const res = await fetch(url, { cache: "no-store" });
     const data = await res.json();
+
+    console.log("Codeforces Url: ", url);
+    console.log("Codeforces fromEpochSeconds: ", sinceEpochSeconds);
+    console.log("Codeforces submissions", data.slice(0, 2));
 
     if (data.status !== "OK") {
       throw new Error("Codeforces submissions unavailable");

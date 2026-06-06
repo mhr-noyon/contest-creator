@@ -75,7 +75,7 @@ export default function Home() {
                 <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
                   <p className="text-xs uppercase text-neutral-400 tracking-widest">Problems</p>
                   <p className="text-2xl font-bold text-white">'N' curated tasks</p>
-                  <p className="text-sm text-neutral-400">CF • AtCoder • CodeChef</p>
+                  <p className="text-sm text-neutral-400">CF • AtCoder </p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
                   <p className="text-xs uppercase text-neutral-400 tracking-widest">Mode</p>

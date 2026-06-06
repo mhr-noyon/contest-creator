@@ -1,4 +1,4 @@
-export type OJName = "codeforces" | "atcoder" | "codechef";
+export type OJName = "codeforces" | "atcoder";
 
 export type ContestMode = "blitz" | "standard";
 export type ContestStatus = "waiting" | "starting" | "running" | "finished";

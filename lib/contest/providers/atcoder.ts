@@ -7,13 +7,26 @@ const AC_SUBMISSIONS_URL = "https://kenkoooo.com/atcoder/atcoder-api/v3/user/sub
 
 function difficultyToRating(difficulty?: number | null): number | null {
   if (difficulty === null || difficulty === undefined) return null;
-  if (difficulty >= 400) return Math.round(difficulty);
-  const rating = Math.round(400 / Math.exp((400 - difficulty) / 400));
-  if (!Number.isFinite(rating)) return null;
-  return Math.max(0, rating);
+  
+  // 1. Calculate the displayed AtCoder rating (correcting for low ratings < 400)
+  let acRating = difficulty;
+  if (difficulty < 400) {
+    acRating = 400 / Math.exp((400 - difficulty) / 400);
+  }
+
+  // 2. Convert AtCoder rating to Codeforces rating
+  const cfRating = 900 + (acRating - 400) * 0.75;
+
+  // 3. Round to the nearest 100 to align with standard Codeforces rating steps
+  const roundedRating = Math.round(cfRating / 100) * 100;
+
+  // 4. Ensure we don't go below the minimum Codeforces problem rating (800)
+  return Math.max(800, roundedRating);
 }
 
+
 function mapACVerdict(result?: string): "OK" | "WA" | "TLE" | "MLE" | "RE" | "CE" | "OTHER" {
+  console.log("mapACVerdict result", result);
   if (!result) return "OTHER";
   switch (result) {
     case "AC": return "OK";
@@ -53,7 +66,11 @@ export const atcoderProvider: OJProviderInterface = {
   async fetchProblems(filter: ProblemFilter): Promise<OJProblem[]> {
     const { problems, models } = await getAtCoderProblemsAndModels();
 
-    const filtered = (problems || [])
+    // print first 2
+    console.log("Atcoder problems", problems?.slice(0, 2));
+    console.log("Atcoder models", models?.slice(0, 2));
+
+    const filtered = (problems || []) 
       .map((problem: any) => {
         const model = models?.[problem.id];
         const rating = difficultyToRating(model?.difficulty ?? null);
@@ -76,15 +93,20 @@ export const atcoderProvider: OJProviderInterface = {
     return filtered;
   },
   async fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number): Promise<ContestSubmission[]> {
-    const fromSeconds = sinceEpochSeconds ?? Math.floor(Date.now() / 1000) - 60 * 60 * 24;
+    const fromSeconds = sinceEpochSeconds ?? 0;
     const url = `${AC_SUBMISSIONS_URL}?user=${encodeURIComponent(handle)}&from_second=${fromSeconds}`;
     const res = await fetch(url, { cache: "no-store" });
+
+    console.log("Atcoder url: ", url);
+    console.log("Atcoder fromSeconds: ", fromSeconds);
 
     if (!res.ok) {
       throw new Error("AtCoder submissions unavailable");
     }
 
     const data = await res.json();
+
+    console.log("Atcoder submissions", data.slice(0, 2));
 
     return (data || []).map((submission: any) => ({
       id: `ac-${submission.id}`,
