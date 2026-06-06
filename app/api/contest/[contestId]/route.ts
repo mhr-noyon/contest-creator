@@ -181,36 +181,43 @@ export async function POST(
     contest.errorMsg = null;
     await setContest(contestId, contest);
 
-    (async () => {
-      try {
-        const participantHandles = contest.participants.flatMap((participant) => participant.handles);
-        const allHandles = [...contest.handles, ...participantHandles];
+    try {
+      const participantHandles = contest.participants.flatMap((participant) => participant.handles);
+      const allHandles = [...contest.handles, ...participantHandles];
 
-        const problems = await generateProblemSet({
-          settings: contest.settings,
-          handles: allHandles,
-        });
+      const problems = await generateProblemSet({
+        settings: contest.settings,
+        handles: allHandles,
+      });
 
-        const current = await getContest(contestId);
-        if (current && current.status === "starting") {
-          current.problems = problems;
-          current.status = "running";
-          current.settings.startTime = Date.now() + 3000;
-          current.currentProblemIndex = 0;
-          current.nextProblemUnlockedAt = null;
-          current.errorMsg = null;
-          await setContest(contestId, current);
-        }
-      } catch (err: any) {
-        console.error("Error generating problem set:", err);
-        const current = await getContest(contestId);
-        if (current && current.status === "starting") {
-          current.status = "waiting";
-          current.errorMsg = err.message || "Problems not found within this settings.";
-          await setContest(contestId, current);
-        }
+      const current = await getContest(contestId);
+      if (current && current.status === "starting") {
+        current.problems = problems;
+        current.status = "running";
+        current.settings.startTime = Date.now() + 3000;
+        current.currentProblemIndex = 0;
+        current.nextProblemUnlockedAt = null;
+        current.errorMsg = null;
+        await setContest(contestId, current);
+        // Use the updated contest object for the response
+        contest.problems = current.problems;
+        contest.status = current.status;
+        contest.settings = current.settings;
+        contest.currentProblemIndex = current.currentProblemIndex;
+        contest.nextProblemUnlockedAt = current.nextProblemUnlockedAt;
+        contest.errorMsg = current.errorMsg;
       }
-    })();
+    } catch (err: any) {
+      console.error("Error generating problem set:", err);
+      const current = await getContest(contestId);
+      if (current && current.status === "starting") {
+        current.status = "waiting";
+        current.errorMsg = err.message || "Problems not found within this settings.";
+        await setContest(contestId, current);
+        contest.status = current.status;
+        contest.errorMsg = current.errorMsg;
+      }
+    }
 
     return NextResponse.json({ contest: scrubContest(contest) });
   }

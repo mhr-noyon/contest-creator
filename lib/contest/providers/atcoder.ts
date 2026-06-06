@@ -65,7 +65,7 @@ async function getAtCoderProblems(): Promise<OJProblem[]> {
     }
   }
 
-  // 3. Cache miss: Fetch and pre-process raw data
+  // 3. Cache miss: Fetch and pre-process raw data from Kenkoooo
   console.log("Fetching AtCoder problems and models from Kenkoooo...");
   
   const headers = {
@@ -131,7 +131,10 @@ export const atcoderProvider: OJProviderInterface = {
   async fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number): Promise<ContestSubmission[]> {
     const fromSeconds = sinceEpochSeconds ?? 0;
     const url = `${AC_SUBMISSIONS_URL}?user=${encodeURIComponent(handle)}&from_second=${fromSeconds}`;
-    const res = await fetch(url, { cache: "no-store" });
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    };
+    const res = await fetch(url, { headers, cache: "no-store" });
 
     console.log("Atcoder url: ", url);
     console.log("Atcoder fromSeconds: ", fromSeconds);
@@ -157,7 +160,10 @@ export const atcoderProvider: OJProviderInterface = {
   async verifyHandle(handle: string): Promise<boolean> {
     try {
       const url = `https://atcoder.jp/users/${encodeURIComponent(handle)}`;
-      const res = await fetch(url, { cache: "no-store" });
+      const headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      };
+      const res = await fetch(url, { headers, cache: "no-store" });
       return res.status === 200;
     } catch {
       return false;
