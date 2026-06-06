@@ -25,7 +25,13 @@ export async function syncContestSubmissions(contest: Contest): Promise<Contest>
       seenHandles.add(handleKey);
 
       const provider = getProvider(handleEntry.oj);
-      const since = contest.sync.lastFetchedAtByHandle[handleKey];
+      
+      // Calculate a safe starting time: 10 minutes (600 seconds) before the contest started.
+      const contestStartSeconds = Math.floor(startTime / 1000) - 600;
+      
+      // Go back by 10 minutes (600 seconds) from the last fetched time as a safety margin for scraping delays.
+      const lastFetched = contest.sync.lastFetchedAtByHandle[handleKey];
+      const since = lastFetched ? Math.max(contestStartSeconds, lastFetched - 600) : contestStartSeconds;
 
       const recent = await provider.fetchRecentSubmissions(handleEntry.handle, since);
 
