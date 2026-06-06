@@ -1,13 +1,11 @@
 import { atcoderProvider } from "@/lib/contest/providers/atcoder";
-import { codechefProvider } from "@/lib/contest/providers/codechef";
 import { codeforcesProvider } from "@/lib/contest/providers/codeforces";
 import { OJName } from "@/lib/contest/types";
 import { OJProviderInterface } from "@/lib/contest/providers/types";
 
 const PROVIDERS: Record<OJName, OJProviderInterface> = {
   codeforces: codeforcesProvider,
-  atcoder: atcoderProvider,
-  codechef: codechefProvider,
+  atcoder: atcoderProvider
 };
 
 export function getProvider(oj: OJName): OJProviderInterface {

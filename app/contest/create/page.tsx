@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 
 const OJ_OPTIONS = [
   { label: "Codeforces", value: "codeforces" },
-  { label: "AtCoder", value: "atcoder" },
-  { label: "CodeChef", value: "codechef" },
+  { label: "AtCoder", value: "atcoder" }
 ];
 
 type OjHandleGroup = {
@@ -368,7 +367,7 @@ export default function ContestCreatePage() {
             <p className="text-emerald-200 text-sm uppercase tracking-widest">Virtual Contest Builder</p>
             <h1 className="text-4xl md:text-6xl font-extrabold mt-2">Create a custom contest</h1>
             <p className="text-neutral-400 mt-3 max-w-2xl">
-              Mix problems across Codeforces, AtCoder, and CodeChef with smart filters. Track submissions live
+              Mix problems across Codeforces, and AtCoder with smart filters. Track submissions live
               with Vercel-safe polling.
             </p>
           </div>
