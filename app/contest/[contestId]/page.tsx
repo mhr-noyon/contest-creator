@@ -135,13 +135,13 @@ export default function ContestPage() {
   // Tick starting countdown when contest status is "starting"
   useEffect(() => {
     if (contest?.status !== "starting" || !contest?.startRequestedAt) {
-      setStartingCountdown(20);
+      setStartingCountdown(30);
       return;
     }
     const tick = () => {
       const adjustedNow = Date.now() - serverOffsetRef.current;
       const elapsed = Math.floor((adjustedNow - (contest.startRequestedAt || 0)) / 1000);
-      const remaining = Math.max(0, 20 - elapsed);
+      const remaining = Math.max(0, 30 - elapsed);
       setStartingCountdown(remaining);
     };
     tick();

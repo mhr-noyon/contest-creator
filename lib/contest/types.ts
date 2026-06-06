@@ -54,7 +54,7 @@ export type ContestDifficultyConfig = {
 
 export type ContestSettings = {
   title: string;
-  description: string;
+  description?: string | null;
   durationMinutes: number;
   startTime: number | null;
   mode: ContestMode;
