@@ -65,9 +65,7 @@ export const codeforcesProvider: OJProviderInterface = {
     }));
   },
   async fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number): Promise<ContestSubmission[]> {
-    const url = sinceEpochSeconds
-      ? `${CF_SUBMISSION_URL}?handle=${encodeURIComponent(handle)}&from=1&count=200`
-      : `${CF_SUBMISSION_URL}?handle=${encodeURIComponent(handle)}`;
+    const url = `${CF_SUBMISSION_URL}?handle=${encodeURIComponent(handle)}&from=1&count=200`;
     const res = await fetch(url, { cache: "no-store" });
     const data = await res.json();
 

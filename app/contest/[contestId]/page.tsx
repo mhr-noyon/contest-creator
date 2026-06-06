@@ -905,7 +905,12 @@ export default function ContestPage() {
                         {contest.problems.map((problem, index) => (
                           <th 
                             key={problem.id} 
-                            className="py-3 px-4 text-center border-l border-white/5 bg-white/5 whitespace-nowrap min-w-[100px]"
+                            className="py-3 px-4 text-center border-l border-white/5 bg-white/5 whitespace-nowrap min-w-[100px] cursor-pointer"
+                            onClick={() => {
+                              if (problem?.url) {
+                                window.open(problem.url, "_blank");
+                              }
+                            }}
                           >
                             <span className="text-emerald-300 font-bold block text-sm">
                               {String.fromCharCode(65 + index)}
@@ -1021,7 +1026,13 @@ export default function ContestPage() {
                     <div key={submission.id} className="rounded-2xl border border-white/10 bg-black/40 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-white">{problem?.title || "Unknown problem"}</p>
+                          {/* Show online judge also and make the problem title clickable */}
+                          <p className="text-base font-semibold text-white">{String.fromCharCode((problem?.order ?? 0) + 65)}. <a href={problem?.url} target="_blank" rel="noopener noreferrer">{problem?.title || "Unknown problem"}</a></p>
+                          {problem?.url && (
+                            <a href={problem.url} target="_blank" rel="noopener noreferrer" className="text-xs text-neutral-500 mt-1">
+                              View on {problem?.oj}
+                            </a>
+                          )}
                           {contest.settings.showRatings && problem?.tags?.length ? (
                             <p className="text-xs text-neutral-500 mt-1">
                               {problem.tags.join(", ")}
