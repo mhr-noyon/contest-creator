@@ -65,13 +65,15 @@ export const codeforcesProvider: OJProviderInterface = {
     }));
   },
   async fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number): Promise<ContestSubmission[]> {
-    const url = `${CF_SUBMISSION_URL}?handle=${encodeURIComponent(handle)}&from=1&count=200`;
+    const url = sinceEpochSeconds
+      ? `${CF_SUBMISSION_URL}?handle=${encodeURIComponent(handle)}&from=1&count=200`
+      : `${CF_SUBMISSION_URL}?handle=${encodeURIComponent(handle)}`;
     const res = await fetch(url, { cache: "no-store" });
     const data = await res.json();
 
     console.log("Codeforces Url: ", url);
     console.log("Codeforces fromEpochSeconds: ", sinceEpochSeconds);
-    console.log("Codeforces submissions", data.slice(0, 2));
+    console.log("Codeforces submissions", data.result?.slice(0, 2));
 
     if (data.status !== "OK") {
       throw new Error("Codeforces submissions unavailable");

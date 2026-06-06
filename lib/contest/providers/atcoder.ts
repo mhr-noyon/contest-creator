@@ -1,5 +1,6 @@
 import { ContestSubmission } from "@/lib/contest/types";
 import { OJProblem, OJProviderInterface, ProblemFilter } from "@/lib/contest/providers/types";
+import { redis } from "@/lib/store";
 
 const AC_PROBLEMS_URL = "https://kenkoooo.com/atcoder/resources/merged-problems.json";
 const AC_MODELS_URL = "https://kenkoooo.com/atcoder/resources/problem-models.json";
@@ -24,7 +25,6 @@ function difficultyToRating(difficulty?: number | null): number | null {
   return Math.max(800, roundedRating);
 }
 
-
 function mapACVerdict(result?: string): "OK" | "WA" | "TLE" | "MLE" | "RE" | "CE" | "OTHER" {
   console.log("mapACVerdict result", result);
   if (!result) return "OTHER";
@@ -39,58 +39,94 @@ function mapACVerdict(result?: string): "OK" | "WA" | "TLE" | "MLE" | "RE" | "CE
   }
 }
 
-let cachedProblems: any = null;
-let cachedModels: any = null;
+let cachedProblemsList: OJProblem[] | null = null;
 let lastFetchedAt = 0;
 
-async function getAtCoderProblemsAndModels() {
+async function getAtCoderProblems(): Promise<OJProblem[]> {
   const now = Date.now();
-  if (cachedProblems && cachedModels && (now - lastFetchedAt < 5 * 60 * 1000)) {
-    return { problems: cachedProblems, models: cachedModels };
+  
+  // 1. Try local memory cache (very fast fallback / hot lambda)
+  if (cachedProblemsList && (now - lastFetchedAt < 5 * 60 * 1000)) {
+    return cachedProblemsList;
   }
+
+  // 2. Try Redis cache (highly recommended for serverless production)
+  if (redis) {
+    try {
+      const cached = await redis.get<OJProblem[]>("atcoder:problems:processed");
+      if (cached && Array.isArray(cached) && cached.length > 0) {
+        cachedProblemsList = cached;
+        lastFetchedAt = now;
+        console.log(`Retrieved ${cached.length} pre-processed AtCoder problems from Redis.`);
+        return cached;
+      }
+    } catch (err) {
+      console.warn("Failed to retrieve AtCoder problems from Redis:", err);
+    }
+  }
+
+  // 3. Cache miss: Fetch and pre-process raw data
+  console.log("Fetching AtCoder problems and models from Kenkoooo...");
+  
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  };
+
   const [problemsRes, modelsRes] = await Promise.all([
-    fetch(AC_PROBLEMS_URL, { cache: "no-store" }),
-    fetch(AC_MODELS_URL, { cache: "no-store" }),
+    fetch(AC_PROBLEMS_URL, { headers, cache: "no-store" }),
+    fetch(AC_MODELS_URL, { headers, cache: "no-store" }),
   ]);
+
   if (!problemsRes.ok || !modelsRes.ok) {
-    throw new Error("AtCoder problems or models failed to fetch");
+    console.error(`AtCoder fetch failed. problemsRes: ${problemsRes.status}, modelsRes: ${modelsRes.status}`);
+    throw new Error(`AtCoder problems or models failed to fetch: problems=${problemsRes.status}, models=${modelsRes.status}`);
   }
-  cachedProblems = await problemsRes.json();
-  cachedModels = await modelsRes.json();
+
+  const problems = await problemsRes.json();
+  const models = await modelsRes.json();
+
+  const processed: OJProblem[] = (problems || [])
+    .map((problem: any) => {
+      const model = models?.[problem.id];
+      const rating = difficultyToRating(model?.difficulty ?? null);
+      const title = String(problem.title || "").replace(/^[A-Za-z0-9]+\.\s*/, "");
+      return {
+        id: problem.id,
+        title,
+        url: `https://atcoder.jp/contests/${problem.contest_id}/tasks/${problem.id}`,
+        rating,
+        tags: [] as string[],
+        oj: "atcoder" as const,
+      };
+    })
+    .filter((p: OJProblem) => p.rating !== null);
+
+  cachedProblemsList = processed;
   lastFetchedAt = now;
-  return { problems: cachedProblems, models: cachedModels };
+
+  // 4. Cache pre-processed list to Redis for 24 hours (compact size ~600KB)
+  if (redis && processed.length > 0) {
+    try {
+      await redis.set("atcoder:problems:processed", processed, { ex: 60 * 60 * 24 });
+      console.log(`Saved ${processed.length} pre-processed AtCoder problems to Redis.`);
+    } catch (err) {
+      console.warn("Failed to cache AtCoder problems to Redis:", err);
+    }
+  }
+
+  return processed;
 }
 
 export const atcoderProvider: OJProviderInterface = {
   name: "atcoder",
   async fetchProblems(filter: ProblemFilter): Promise<OJProblem[]> {
-    const { problems, models } = await getAtCoderProblemsAndModels();
+    const problems = await getAtCoderProblems();
+    console.log("Atcoder problems cached length:", problems.length);
 
-    // print first 2
-    console.log("Atcoder problems", problems?.slice(0, 2));
-    console.log("Atcoder models", models?.slice(0, 2));
-
-    const filtered = (problems || []) 
-      .map((problem: any) => {
-        const model = models?.[problem.id];
-        const rating = difficultyToRating(model?.difficulty ?? null);
-        const title = String(problem.title || "").replace(/^[A-Za-z0-9]+\.\s*/, "");
-        return {
-          id: problem.id,
-          title,
-          url: `https://atcoder.jp/contests/${problem.contest_id}/tasks/${problem.id}`,
-          rating,
-          tags: [],
-          oj: "atcoder" as const,
-        };
-      })
-      .filter((problem: OJProblem) => {
-        if (!problem.rating) return false;
-        if (problem.rating < filter.minRating || problem.rating > filter.maxRating) return false;
-        return true;
-      });
-
-    return filtered;
+    return problems.filter((problem: OJProblem) => {
+      const rating = problem.rating!;
+      return rating >= filter.minRating && rating <= filter.maxRating;
+    });
   },
   async fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number): Promise<ContestSubmission[]> {
     const fromSeconds = sinceEpochSeconds ?? 0;
