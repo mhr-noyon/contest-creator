@@ -246,7 +246,7 @@ export default function ContestCreatePage() {
 
       if (!ownerName.trim()) nextErrors.ownerName = "Owner name is required.";
       if (!title.trim()) nextErrors.title = "Contest title is required.";
-      if (!description.trim()) nextErrors.description = "Contest description is required.";
+      // if (!description.trim()) nextErrors.description = "Contest description is required.";
       if (!durationMinutes || Number(durationMinutes) <= 0) nextErrors.durationMinutes = "Duration is required.";
       if (!numberOfProblems || Number(numberOfProblems) <= 0) nextErrors.numberOfProblems = "Number of problems is required.";
       if (!mode) nextErrors.mode = "Contest mode is required.";
