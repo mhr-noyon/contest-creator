@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import Navbar from "@/components/Navbar";
 
 const OJ_OPTIONS = [
   { label: "Codeforces", value: "codeforces" },
@@ -39,7 +40,34 @@ export default function ContestCreatePage() {
   ]);
 
   const [ownerName, setOwnerName] = useState("");
-  const [title, setTitle] = useState("Custom Virtual Contest");
+  const [title, setTitle] = useState("");
+
+  // Load profile from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("user-profile");
+    if (saved) {
+      try {
+        const profile = JSON.parse(saved);
+        if (profile.expiresAt && profile.expiresAt > Date.now()) {
+          if (profile.name) {
+            setOwnerName(profile.name);
+          }
+          const groups: OjHandleGroup[] = [];
+          if (profile.cfHandle) {
+            groups.push({ oj: "codeforces", handles: [profile.cfHandle] });
+          }
+          if (profile.atcoderHandle) {
+            groups.push({ oj: "atcoder", handles: [profile.atcoderHandle] });
+          }
+          if (groups.length > 0) {
+            setHandleGroups(groups);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to parse user profile:", err);
+      }
+    }
+  }, []);
   const [description, setDescription] = useState("");
   const [durationMinutes, setDurationMinutes] = useState<number | string>(120);
   const [numberOfProblems, setNumberOfProblems] = useState<number | string>(5);
@@ -245,7 +273,6 @@ export default function ContestCreatePage() {
       const nextErrors: Record<string, string> = {};
 
       if (!ownerName.trim()) nextErrors.ownerName = "Owner name is required.";
-      if (!title.trim()) nextErrors.title = "Contest title is required.";
       // if (!description.trim()) nextErrors.description = "Contest description is required.";
       if (!durationMinutes || Number(durationMinutes) <= 0) nextErrors.durationMinutes = "Duration is required.";
       if (!numberOfProblems || Number(numberOfProblems) <= 0) nextErrors.numberOfProblems = "Number of problems is required.";
@@ -352,7 +379,9 @@ export default function ContestCreatePage() {
   }
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-white px-6 py-12">
+    <>
+      <Navbar />
+      <main className="min-h-screen bg-neutral-950 text-white px-6 py-12">
       <div className="max-w-6xl mx-auto">
         <div className="mb-6">
           <button
@@ -398,13 +427,11 @@ export default function ContestCreatePage() {
                     value={title}
                     onChange={(event) => {
                       setTitle(limitText(event.target.value, 100));
-                      if (event.target.value.trim()) clearFieldError("title");
                     }}
                     maxLength={100}
-                    placeholder="Contest title"
-                    className={`mt-2 w-full bg-black/50 border rounded-xl px-4 py-3 text-white ${fieldErrors.title ? "border-red-500/70" : "border-white/10"}`}
+                    placeholder="Custom Virtual Contest # (Auto)"
+                    className="mt-2 w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white"
                   />
-                  {fieldErrors.title && <span className="mt-2 text-xs text-red-400">{fieldErrors.title}</span>}
                 </label>
                 <label className="text-sm text-neutral-400 md:col-span-2" data-error-key="description">
                   Contest description
@@ -969,5 +996,6 @@ export default function ContestCreatePage() {
         </div>
       )}
     </main>
+    </>
   );
 }

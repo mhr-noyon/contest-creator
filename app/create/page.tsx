@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Navbar from "@/components/Navbar";
 
 export default function CreateContest() {
   const router = useRouter();
@@ -135,8 +136,10 @@ export default function CreateContest() {
   }
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-white p-6 md:p-12 relative">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 bg-indigo-600/10 blur-[100px] pointer-events-none" />
+    <>
+      <Navbar />
+      <main className="min-h-screen bg-neutral-950 text-white p-6 md:p-12 relative">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 bg-indigo-600/10 blur-[100px] pointer-events-none" />
 
       <div className="max-w-3xl mx-auto relative z-10">
         <button onClick={() => router.push("/")} className="text-neutral-400 hover:text-white mb-8 flex items-center gap-2 transition-colors">
@@ -295,5 +298,6 @@ export default function CreateContest() {
         </div>
       </div>
     </main>
+    </>
   );
 }

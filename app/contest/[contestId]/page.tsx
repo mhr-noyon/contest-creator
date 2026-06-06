@@ -132,6 +132,25 @@ export default function ContestPage() {
     }
   }, [contest?.errorMsg]);
 
+  // Load profile from localStorage on mount to pre-fill the join fields
+  useEffect(() => {
+    if (!contestId) return;
+    const saved = localStorage.getItem("user-profile");
+    if (saved) {
+      try {
+        const profile = JSON.parse(saved);
+        if (profile.expiresAt && profile.expiresAt > Date.now()) {
+          const storedJoinName = localStorage.getItem(`contest-join-${contestId}`);
+          if (!storedJoinName && profile.name) {
+            setJoinName(profile.name);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load profile:", err);
+      }
+    }
+  }, [contestId]);
+
   // Tick starting countdown when contest status is "starting"
   useEffect(() => {
     if (contest?.status !== "starting" || !contest?.startRequestedAt) {
@@ -161,7 +180,7 @@ export default function ContestPage() {
         .then((data) => {
           if (data.contest) setContest(data.contest);
         })
-        .catch((err) => console.error("Abort failed:", err));
+        .catch(console.error);
     }
   }, [contest?.status, startingCountdown, isOwner, contestId]);
 
@@ -205,6 +224,10 @@ export default function ContestPage() {
   useEffect(() => {
     if (!contestId) return;
 
+    let active = true;
+    const storedJoinName = typeof window !== "undefined" ? localStorage.getItem(`contest-join-${contestId}`) : null;
+    const ownerSnapshotName = typeof window !== "undefined" ? localStorage.getItem(`blitz-contest-${contestId}`) ? JSON.parse(localStorage.getItem(`blitz-contest-${contestId}`)!).ownerName : null : null;
+
     async function fetchContest() {
       try {
         const res = await fetch(`/api/contest/${contestId}`, { cache: "no-store" });
@@ -230,9 +253,29 @@ export default function ContestPage() {
           setJoinGroups((prev) => {
             if (prev.length > 0) return prev;
             const ojs = Array.from(new Set(data.contest.handles.map((handle: any) => String(handle.oj || "")))) as string[];
+            
+            // Check if there is already a saved display name for this contest, or if we have a profile display name
+            const currentJoinName = (localStorage.getItem(`contest-join-${contestId}`) || "").trim();
+            const savedProfile = localStorage.getItem("user-profile");
+            let profileName = "";
+            let profileCf = "";
+            let profileAtcoder = "";
+            if (savedProfile) {
+              try {
+                const parsed = JSON.parse(savedProfile);
+                if (parsed.expiresAt && parsed.expiresAt > Date.now()) {
+                  profileName = parsed.name || "";
+                  profileCf = parsed.cfHandle || "";
+                  profileAtcoder = parsed.atcoderHandle || "";
+                }
+              } catch {}
+            }
+
+            const activeName = currentJoinName || profileName || joinName;
+
             const self = data.contest.participants?.find(
               (participant: any) =>
-                participant.displayName?.toLowerCase() === joinName.trim().toLowerCase()
+                participant.displayName?.toLowerCase() === activeName.trim().toLowerCase()
             );
             if (self) {
               return ojs.map((oj) => ({
@@ -242,7 +285,17 @@ export default function ContestPage() {
                   .map((handle: any) => String(handle.handle || "")),
               }));
             }
-            return ojs.map((oj) => ({ oj, handles: [""] }));
+
+            // Otherwise pre-fill with profile handles where matches OJ
+            return ojs.map((oj) => {
+              if (oj === "codeforces" && profileCf) {
+                return { oj, handles: [profileCf] };
+              }
+              if (oj === "atcoder" && profileAtcoder) {
+                return { oj, handles: [profileAtcoder] };
+              }
+              return { oj, handles: [""] };
+            });
           });
         }
       } catch (err: any) {

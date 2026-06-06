@@ -13,8 +13,8 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BlitzChallenge",
-  description: "Real-time Codeforces programming duels",
+  title: "Blitz Challenge",
+  description: "Create and join coding contests with your friends.",
 };
 
 export default function RootLayout({
