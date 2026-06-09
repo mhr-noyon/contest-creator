@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState, useRef } from "react";
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import Script from "next/script";
+import ProblemView from "@/components/contest/ProblemView";
+import SubmitView from "@/components/contest/SubmitView";
 import {
   Contest,
   ContestProblem,
@@ -28,6 +31,7 @@ export default function ContestPage() {
   const params = useParams();
   const contestId = params?.contestId as string;
   const pathname = usePathname();
+  const router = useRouter();
 
   const [contest, setContest] = useState<Contest | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -37,6 +41,8 @@ export default function ContestPage() {
     const minutes = parseFloat(process.env.RefreshIntervalTime || "0.133");
     return Math.max(1000, minutes * 60 * 1000);
   }, []);
+  const refreshCooldownMs = 10_000;
+  const autoRefreshMs = 20_000;
   const [error, setError] = useState<string | null>(null);
   const [authorized, setAuthorized] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -49,10 +55,15 @@ export default function ContestPage() {
   const [starting, setStarting] = useState(false);
   const [startCountdown, setStartCountdown] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const [startingCountdown, setStartingCountdown] = useState(20);
+  const [startingCountdown, setStartingCountdown] = useState(10);
+  const [lobbyCountdown, setLobbyCountdown] = useState<number | null>(null);
+  const [showContestStarted, setShowContestStarted] = useState(false);
+  const [syncingSubmissions, setSyncingSubmissions] = useState(false);
 
   // Consolidated Tab State
-  const [activeTab, setActiveTab] = useState<"problems" | "leaderboard" | "status" | "info">("problems");
+  const [activeTab, setActiveTab] = useState<"problems" | "leaderboard" | "status" | "info" | "submit">("problems");
+  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
+  const [submitInitialProblemId, setSubmitInitialProblemId] = useState<string | null>(null);
   const [scoreboard, setScoreboard] = useState<Scoreboard | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -89,7 +100,7 @@ export default function ContestPage() {
   const buttonGhostClass =
     "text-xs uppercase tracking-widest text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer";
   
-  const navLinkClass = (tab: "problems" | "leaderboard" | "status" | "info") =>
+  const navLinkClass = (tab: "problems" | "leaderboard" | "status" | "info" | "submit") =>
     `px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-200 cursor-pointer ${
       activeTab === tab
         ? "border-emerald-400/60 text-emerald-200 bg-emerald-500/10 shadow-sm"
@@ -101,20 +112,49 @@ export default function ContestPage() {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get("tab");
-      if (tab === "problems" || tab === "leaderboard" || tab === "status" || tab === "info") {
+      const probId = params.get("problemId");
+      if (tab === "problems" || tab === "leaderboard" || tab === "status" || tab === "info" || tab === "submit") {
         setActiveTab(tab as any);
+      }
+      if (probId) {
+        setSelectedProblemId(probId);
+        if (tab === "submit") {
+          setSubmitInitialProblemId(probId);
+        }
       }
     }
   }, []);
 
-  const handleTabChange = (tab: "problems" | "leaderboard" | "status" | "info") => {
+  const handleTabChange = (tab: "problems" | "leaderboard" | "status" | "info" | "submit") => {
     setActiveTab(tab);
+    if (tab !== "problems") {
+      setSelectedProblemId(null);
+    }
+    if (tab !== "submit") {
+      setSubmitInitialProblemId(null);
+    }
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("tab", tab);
+      url.searchParams.delete("problemId"); // clear problemId parameter when tab changes
       window.history.pushState({}, "", url.toString());
     }
   };
+
+  const handleSelectProblem = (probId: string | null) => {
+    setSelectedProblemId(probId);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (probId) {
+        url.searchParams.set("problemId", probId);
+      } else {
+        url.searchParams.delete("problemId");
+      }
+      window.history.pushState({}, "", url.toString());
+    }
+  };
+
+  const canSyncSubmissions = contest?.status === "running" || contest?.status === "finished";
 
   // Auto dismiss toast
   useEffect(() => {
@@ -152,21 +192,94 @@ export default function ContestPage() {
   }, [contestId]);
 
   // Tick starting countdown when contest status is "starting"
+  // Starts at 10 seconds and auto-extends by 10 seconds (up to 90s max) if backend is still generating.
   useEffect(() => {
     if (contest?.status !== "starting" || !contest?.startRequestedAt) {
-      setStartingCountdown(30);
+      setStartingCountdown(10);
       return;
     }
     const tick = () => {
       const adjustedNow = Date.now() - serverOffsetRef.current;
       const elapsed = Math.floor((adjustedNow - (contest.startRequestedAt || 0)) / 1000);
-      const remaining = Math.max(0, 30 - elapsed);
+      let limit = 10;
+      while (elapsed >= limit && limit < 90) {
+        limit += 10;
+      }
+      const remaining = Math.max(0, limit - elapsed);
       setStartingCountdown(remaining);
     };
     tick();
     const interval = setInterval(tick, 250);
     return () => clearInterval(interval);
   }, [contest?.status, contest?.startRequestedAt]);
+
+  // Manage the starting/waiting lobby countdown seen by the user
+  useEffect(() => {
+    if (!contest) return;
+
+    if (contest.status === "waiting") {
+      setLobbyCountdown(null);
+      setShowContestStarted(false);
+      return;
+    }
+
+    if (contest.status === "starting") {
+      setLobbyCountdown(startingCountdown);
+      setShowContestStarted(false);
+      return;
+    }
+
+    if (contest.status === "running") {
+      const adjustedNow = Date.now() - serverOffsetRef.current;
+      const isPastStart = contest.settings.startTime && (adjustedNow >= contest.settings.startTime);
+
+      if (isPastStart) {
+        setShowContestStarted(true);
+        setLobbyCountdown(null);
+      } else {
+        // Under startup countdown!
+        setLobbyCountdown((prev) => {
+          if (prev === null) {
+            // Compute remaining seconds
+            const remaining = Math.max(0, Math.ceil(((contest.settings.startTime || 0) - adjustedNow) / 1000));
+            // Wait at least 5 seconds
+            return remaining > 5 ? remaining : 5;
+          }
+          return prev;
+        });
+      }
+    }
+
+    if (contest.status === "finished") {
+      setShowContestStarted(true);
+      setLobbyCountdown(null);
+    }
+  }, [contest?.status, contest?.settings.startTime, startingCountdown]);
+
+  // Tick down lobby countdown every second
+  useEffect(() => {
+    if (lobbyCountdown === null || lobbyCountdown <= 0) {
+      if (lobbyCountdown === 0 && contest?.status === "running") {
+        setShowContestStarted(true);
+      }
+      return;
+    }
+    const timer = setTimeout(() => {
+      setLobbyCountdown((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [lobbyCountdown, contest?.status]);
+
+  // Trigger sync on loading leaderboard
+  useEffect(() => {
+    if (activeTab === "leaderboard" && canSyncSubmissions) {
+      const storageKey = contestId ? `contest-refresh-${contestId}` : "";
+      const lastRefreshAt = storageKey ? Number(localStorage.getItem(storageKey) || 0) : 0;
+      if (!lastRefreshAt || Date.now() - lastRefreshAt >= autoRefreshMs) {
+        triggerSync("auto");
+      }
+    }
+  }, [activeTab, canSyncSubmissions, contestId]);
 
   // Owner auto-abort starting if countdown reaches 0
   useEffect(() => {
@@ -304,9 +417,9 @@ export default function ContestPage() {
     }
 
     fetchContest();
-    const interval = setInterval(fetchContest, refreshIntervalMs);
+    const interval = setInterval(fetchContest, contest?.status === "starting" ? 1000 : refreshIntervalMs);
     return () => clearInterval(interval);
-  }, [contestId, ownerSnapshotName, joinName]);
+  }, [contestId, ownerSnapshotName, joinName, contest?.status]);
 
   // Auto authorize if contest does not require password
   useEffect(() => {
@@ -316,7 +429,7 @@ export default function ContestPage() {
   }, [contest]);
 
   useEffect(() => {
-    if (!contestId || contest?.status !== "running") return;
+    if (!contestId || !canSyncSubmissions) return;
 
     const sync = async () => {
       await fetch(`/api/contest/${contestId}/sync`, { method: "POST" });
@@ -325,7 +438,7 @@ export default function ContestPage() {
     sync();
     const interval = setInterval(sync, 15000);
     return () => clearInterval(interval);
-  }, [contestId, contest?.status]);
+  }, [contestId, canSyncSubmissions]);
 
   // Scoreboard Polling Effect
   useEffect(() => {
@@ -552,6 +665,43 @@ export default function ContestPage() {
     }
   }
 
+  async function triggerSync(source: "manual" | "auto" = "manual") {
+    if (syncingSubmissions || !contestId || !canSyncSubmissions) return;
+
+    const storageKey = `contest-refresh-${contestId}`;
+    const now = Date.now();
+    const lastRefreshAt = Number(localStorage.getItem(storageKey) || 0);
+
+    if (source === "manual" && lastRefreshAt && now - lastRefreshAt < refreshCooldownMs) {
+      const waitSeconds = Math.ceil((refreshCooldownMs - (now - lastRefreshAt)) / 1000);
+      setToast(`Please wait ${waitSeconds}s before refreshing again.`);
+      return;
+    }
+
+    if (source === "auto" && lastRefreshAt && now - lastRefreshAt < autoRefreshMs) {
+      return;
+    }
+
+    localStorage.setItem(storageKey, String(now));
+    setSyncingSubmissions(true);
+    try {
+      const res = await fetch(`/api/contest/${contestId}/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.contest) {
+          setContest(data.contest);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to sync submissions:", err);
+    } finally {
+      setSyncingSubmissions(false);
+    }
+  }
+
   if (error) {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center">
@@ -592,7 +742,7 @@ export default function ContestPage() {
     );
   }
 
-  if (contest.status === "waiting" || contest.status === "starting") {
+  if (contest.status === "waiting" || contest.status === "starting" || !showContestStarted) {
     const hasJoined = isOwner || Boolean(selfParticipant);
     const showJoinForm = !isOwner && !selfParticipant;
 
@@ -608,15 +758,43 @@ export default function ContestPage() {
           </header>
 
           {contest.status === "starting" && (
-            <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-3 animate-pulse">
+            <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-4 animate-pulse">
               <h2 className="text-2xl font-bold text-emerald-200">Generating problems...</h2>
+              
+              <div className="text-sm text-neutral-300 flex items-center justify-center gap-2">
+                <span>Problems Generated:</span>
+                <span className="font-mono text-base font-bold text-emerald-400">
+                  {contest.problemsGeneratedCount ?? 0}
+                </span>
+                <span className="text-neutral-500">/</span>
+                <span className="font-mono text-neutral-400">
+                  {contest.settings.numberOfProblems}
+                </span>
+              </div>
+
               <p className="text-sm text-neutral-300">
-                The contest will start in <span className="font-mono text-lg font-bold text-white">{startingCountdown}s</span>. Please wait.
+                Checking pool & verifying participant submissions... Retrying in <span className="font-mono text-lg font-bold text-white">{startingCountdown}s</span>.
+              </p>
+              
+              <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="bg-emerald-400 h-full transition-all duration-[250ms] ease-linear" 
+                  style={{ width: `${(startingCountdown / 10) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {contest.status === "running" && !showContestStarted && (
+            <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-4">
+              <h2 className="text-2xl font-bold text-emerald-200">Problems generated!</h2>
+              <p className="text-sm text-neutral-300">
+                The contest starts in <span className="font-mono text-lg font-bold text-white">{lobbyCountdown}s</span>. Get ready!
               </p>
               <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
                 <div 
                   className="bg-emerald-400 h-full transition-all duration-[250ms] ease-linear" 
-                  style={{ width: `${(startingCountdown / 20) * 100}%` }}
+                  style={{ width: `${(Math.min(5, lobbyCountdown || 5) / 5) * 100}%` }}
                 />
               </div>
             </div>
@@ -842,6 +1020,14 @@ export default function ContestPage() {
               >
                 Info
               </button>
+              {contest.problems.some((p) => p.oj === "atcoder") && (
+                <button 
+                  onClick={() => handleTabChange("submit")} 
+                  className={navLinkClass("submit")}
+                >
+                  Submit
+                </button>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-6">
@@ -856,7 +1042,7 @@ export default function ContestPage() {
           </div>
         </header>
 
-        {startCountdown > 0 && (
+        {startCountdown > 0 && !showContestStarted && (
           <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-5 py-3 text-emerald-100 font-semibold">
             Contest starts in {startCountdown}s. Get ready!
           </div>
@@ -865,80 +1051,119 @@ export default function ContestPage() {
         {/* Tab content rendering */}
         {activeTab === "problems" && (
           <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <h2 className="text-2xl font-bold">Problem list</h2>
-              <p className="text-sm text-neutral-400">
-                Mode: {contest.settings.mode === "blitz" ? "Blitz progression" : "Standard"}
-              </p>
-            </div>
-            <div className="mt-6 space-y-3">
-              {visibleProblems.length === 0 ? (
-                <p className="text-sm text-neutral-400">Problems unlock once the contest starts.</p>
-              ) : (
-                visibleProblems.map((problem) => {
-                  const index = contest.problems.findIndex((item) => item.id === problem.id);
-                  const status = problemStatus.get(problem.id);
-                  const solved = Boolean(status?.solved);
-                  const incorrect = Boolean(status?.incorrect);
-                  const dim = contest.settings.mode === "blitz" && problem.id !== activeProblemId;
-                  const stateClass = solved
-                    ? "border-emerald-400/40 bg-emerald-500/10 hover:border-emerald-400/60 hover:bg-emerald-500/20"
-                    : incorrect
-                      ? "border-red-500/40 bg-red-500/10 hover:border-red-500/60 hover:bg-red-500/20"
-                      : "border-white/10 bg-black/60 hover:border-white/30 hover:bg-white/5";
-                  return (
-                    <a
-                      key={problem.id}
-                      href={dim ? undefined : problem.url}
-                      target={dim ? undefined : "_blank"}
-                      rel="noreferrer"
-                      className={`block w-full rounded-2xl border p-4 transition-all duration-200 ${stateClass} ${
-                        dim 
-                          ? "opacity-30 cursor-not-allowed pointer-events-none" 
-                          : "opacity-100 hover:scale-[1.01] active:scale-[0.99] hover:shadow-lg"
-                      }`}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h2 className="text-2xl font-bold">Problem list</h2>
+                <div className="flex items-center gap-3">
+                  {canSyncSubmissions && contest.problems.some((p) => p.oj === "atcoder") && (
+                    <button
+                      onClick={() => handleTabChange("submit")}
+                      className="bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          {/* <p className="text-xs uppercase tracking-widest text-neutral-500">
-                            Problem
-                          </p> */}
-                          <h3 className="text-lg font-bold mt-1"> {String.fromCharCode(65 + Math.max(0, index))}. {problem.title}</h3>
-                          <p className="text-sm text-neutral-400 mt-1">
-                            {contest.settings.showRatings && problem.rating ? `Rating ${problem.rating} ${<span className="px-2">·</span>}` : ""}
-                            
-                            {problem.oj}
-                          </p>
-                          {contest.settings.showRatings && problem.tags.length > 0 && (
-                            <p className="text-xs text-neutral-500 mt-2">
-                              {problem.tags.join(", ")}
+                      📝 Verify AtCoder ID
+                    </button>
+                  )}
+                  <p className="text-sm text-neutral-400">
+                    Mode: {contest.settings.mode === "blitz" ? "Blitz progression" : "Standard"}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-6 space-y-3">
+                {visibleProblems.length === 0 ? (
+                  <p className="text-sm text-neutral-400">Problems unlock once the contest starts.</p>
+                ) : (
+                  visibleProblems.map((problem) => {
+                    const index = contest.problems.findIndex((item) => item.id === problem.id);
+                    const status = problemStatus.get(problem.id);
+                    const solved = Boolean(status?.solved);
+                    const incorrect = Boolean(status?.incorrect);
+                    const dim = contest.settings.mode === "blitz" && problem.id !== activeProblemId;
+                    const stateClass = solved
+                      ? "border-emerald-400/40 bg-emerald-500/10 hover:border-emerald-400/60 hover:bg-emerald-500/20"
+                      : incorrect
+                        ? "border-red-500/40 bg-red-500/10 hover:border-red-500/60 hover:bg-red-500/20"
+                        : "border-white/10 bg-black/60 hover:border-white/30 hover:bg-white/5";
+
+                    const isLocalView = problem.oj === "atcoder";
+
+                    const handleClickCard = (e: React.MouseEvent) => {
+                      if (dim) return;
+                    };
+
+                    return (
+                      <a
+                        key={problem.id}
+                        href={dim ? undefined : (isLocalView ? `/contest/${contestId}/problem/${problem.id}` : problem.url)}
+                        onClick={handleClickCard}
+                        target={dim ? undefined : (isLocalView ? undefined : "_blank")}
+                        rel={isLocalView ? undefined : "noreferrer"}
+                        className={`block w-full rounded-2xl border p-4 transition-all duration-200 ${stateClass} ${
+                          dim 
+                            ? "opacity-30 cursor-not-allowed pointer-events-none" 
+                            : "opacity-100 hover:scale-[1.01] active:scale-[0.99] hover:shadow-lg"
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <h3 className="text-lg font-bold mt-1"> {String.fromCharCode(65 + Math.max(0, index))}. {problem.title}</h3>
+                            <p className="text-sm text-neutral-400 mt-1">
+                              {contest.settings.showRatings && problem.rating ? `Rating ${problem.rating} ${<span className="px-2">·</span>}` : ""}
+                              {problem.oj}
                             </p>
-                          )}
+                            {contest.settings.showRatings && problem.tags.length > 0 && (
+                              <p className="text-xs text-neutral-500 mt-2">
+                                {problem.tags.join(", ")}
+                              </p>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {problem.points > 0 && <p className="text-sm font-semibold text-emerald-200">{problem.points} pts</p>}
+                            {solved && <p className="text-xs text-emerald-200 mt-2">Solved</p>}
+                            {!solved && incorrect && <p className="text-xs text-red-300 mt-2">Attempted</p>}
+                            {contest.settings.mode === "blitz" && problem.id === activeProblemId && (
+                              <p className="text-xs text-emerald-200 mt-2">Active</p>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          {problem.points > 0 && <p className="text-sm font-semibold text-emerald-200">{problem.points} pts</p>}
-                          {solved && <p className="text-xs text-emerald-200 mt-2">Solved</p>}
-                          {!solved && incorrect && <p className="text-xs text-red-300 mt-2">Attempted</p>}
-                          {contest.settings.mode === "blitz" && problem.id === activeProblemId && (
-                            <p className="text-xs text-emerald-200 mt-2">Active</p>
-                          )}
-                        </div>
-                      </div>
-                    </a>
-                  );
-                })
-              )}
-            </div>
-          </section>
+                      </a>
+                    );
+                  })
+                )}
+              </div>
+            </section>
         )}
 
         {activeTab === "leaderboard" && (
           <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <h2 className="text-2xl font-bold">Leaderboard</h2>
-              <p className="text-sm text-neutral-400">
-                {scoreboard ? `Updated ${elapsedSeconds}s ago` : "Live updates every few seconds"}
-              </p>
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold">Leaderboard</h2>
+                {syncingSubmissions && (
+                  <span className="text-xs text-emerald-400 animate-pulse flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    Syncing...
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                {canSyncSubmissions && contest.problems.some((p) => p.oj === "atcoder") && (
+                  <button
+                    onClick={() => handleTabChange("submit")}
+                    className="bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                  >
+                    📝 Verify AtCoder ID
+                  </button>
+                )}
+                <button
+                  onClick={() => triggerSync("manual")}
+                  disabled={syncingSubmissions || !canSyncSubmissions}
+                  className="bg-neutral-800 hover:bg-neutral-700 border border-white/10 text-neutral-200 hover:text-white text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-50 transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  {syncingSubmissions ? "⟳ Syncing..." : "↻ Refresh"}
+                </button>
+                <p className="text-sm text-neutral-400">
+                  {scoreboard ? `Updated ${elapsedSeconds}s ago` : "Live updates every few seconds"}
+                </p>
+              </div>
             </div>
             
             <div className="mt-6">
@@ -960,7 +1185,9 @@ export default function ContestPage() {
                             key={problem.id} 
                             className="py-3 px-4 text-center border-l border-white/5 bg-white/5 whitespace-nowrap min-w-[100px] cursor-pointer"
                             onClick={() => {
-                              if (problem?.url) {
+                              if (problem?.oj === "atcoder") {
+                                router.push(`/contest/${contestId}/problem/${problem.id}`);
+                              } else if (problem?.url) {
                                 window.open(problem.url, "_blank");
                               }
                             }}
@@ -1210,6 +1437,23 @@ export default function ContestPage() {
             </aside>
           </div>
         )}
+
+        {activeTab === "submit" && (
+          <SubmitView
+            contestId={contestId}
+            displayName={joinName}
+            initialProblemId={submitInitialProblemId}
+            problems={contest.problems}
+            onSuccess={() => {
+              setSubmitInitialProblemId(null);
+              handleTabChange("leaderboard");
+            }}
+            onCancel={() => {
+              setSubmitInitialProblemId(null);
+              handleTabChange("problems");
+            }}
+          />
+        )}
       </div>
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 max-w-sm rounded-2xl border border-red-500/30 bg-red-950 px-5 py-4 text-red-100 shadow-xl backdrop-blur">
@@ -1258,6 +1502,26 @@ export default function ContestPage() {
           </div>
         </div>
       )}
+
+      {/* MathJax configuration and library script loaded once at the page level */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            window.MathJax = {
+              tex2jax: {
+                inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+                displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
+                processEscapes: true,
+                skipTags: ["script","noscript","style","textarea"]
+              }
+            };
+          `
+        }}
+      />
+      <Script
+        src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML"
+        strategy="afterInteractive"
+      />
     </main>
   );
 }

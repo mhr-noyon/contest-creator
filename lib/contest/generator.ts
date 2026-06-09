@@ -1,6 +1,7 @@
 import { getProvider } from "@/lib/contest/providers";
 import { ContestProblem, ContestSettings, ContestHandle, DifficultyRange, OJName } from "@/lib/contest/types";
 import { clamp } from "@/lib/contest/utils";
+import { canScrapeEnglish, canScrapeCodeforcesEnglish } from "@/lib/contest/problems";
 
 const DEFAULT_POINTS = 0;
 
@@ -51,13 +52,15 @@ function buildScoreList(settings: ContestSettings, count: number): number[] {
 export async function generateProblemSet({
   settings,
   handles,
+  onProgress,
 }: {
   settings: ContestSettings;
   handles: ContestHandle[];
+  onProgress?: (problemsGeneratedCount: number) => Promise<void>;
 }): Promise<ContestProblem[]> {
   const ojs = Array.from(new Set(handles.map((h) => h.oj)));
 
-  const solvedByOj: Record<string, Set<string>> = {};
+  const attemptedByOj: Record<string, Set<string>> = {};
 
   for (const oj of ojs) {
     const provider = getProvider(oj);
@@ -70,16 +73,14 @@ export async function generateProblemSet({
       });
     const ojHandles = Array.from(handleMap.values());
 
-    solvedByOj[oj] = new Set<string>();
+    attemptedByOj[oj] = new Set<string>();
 
     await Promise.all(
       ojHandles.map(async (handle) => {
         try {
-          const submissions = await provider.fetchRecentSubmissions(handle);
+          const submissions = await provider.fetchRecentSubmissions(handle, undefined, 10000);
           submissions.forEach((submission) => {
-            if (submission.verdict === "OK") {
-              solvedByOj[oj].add(submission.problemId);
-            }
+            attemptedByOj[oj].add(submission.problemId.toLowerCase());
           });
         } catch (err) {
           console.warn(`Failed to fetch submissions for ${oj} handle ${handle}:`, err);
@@ -88,58 +89,138 @@ export async function generateProblemSet({
     );
   }
 
-  const problems: ContestProblem[] = [];
+  const poolCache: Record<string, Record<string, any[]>> = {
+    codeforces: {},
+    atcoder: {},
+  };
+
+  async function getCachedPool(oj: OJName, range: DifficultyRange) {
+    const key = `${range.min}-${range.max}`;
+    if (poolCache[oj][key]) {
+      return poolCache[oj][key];
+    }
+    const provider = getProvider(oj);
+    const pool = await provider.fetchProblems({
+      minRating: range.min,
+      maxRating: range.max,
+      count: 200,
+    });
+    poolCache[oj][key] = pool;
+    return pool;
+  }
+
+  const chosenProblems: any[] = [];
+  const chosenProblemIds = new Set<string>();
   const totalCount = clamp(settings.numberOfProblems, 1, 20);
 
-  for (let i = 0; i < totalCount; i += 1) {
-    const range = pickRange(settings, i);
-    
-    const preferredOjs: OJName[] = [];
-    const startIndex = i % ojs.length;
-    for (let k = 0; k < ojs.length; k += 1) {
-      preferredOjs.push(ojs[(startIndex + k) % ojs.length]);
-    }
+  if (onProgress) {
+    await onProgress(0);
+  }
 
-    let selectedProblem = null;
-    let selectedOj: OJName | null = null;
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const needed = totalCount - chosenProblems.length;
+    if (needed <= 0) break;
 
-    for (const oj of preferredOjs) {
-      try {
-        const provider = getProvider(oj);
-        const pool = await provider.fetchProblems({
-          minRating: range.min,
-          maxRating: range.max,
-          count: 200,
-        });
+    const currentIterationCandidates: any[] = [];
+    const currentIterationCandidateKeys = new Set<string>();
 
-        const filtered = pool.filter(
-          (problem) =>
-            !solvedByOj[oj]?.has(problem.id) &&
-            !problems.some((p) => p.id === buildProblemId(oj, problem.id))
-        );
+    for (let i = chosenProblems.length; i < totalCount; i++) {
+      const range = pickRange(settings, i);
 
-        if (filtered.length > 0) {
-          selectedProblem = evenPick(shuffle(filtered), 1)[0];
-          selectedOj = oj;
-          break;
+      if (ojs.length === 2) {
+        // Fetch 1 CF and 1 AC
+        for (const oj of ojs) {
+          try {
+            const pool = await getCachedPool(oj, range);
+            const available = pool.filter((p) => {
+              const key = `${oj}:${p.id}`;
+              return !chosenProblemIds.has(key) && !currentIterationCandidateKeys.has(key);
+            });
+            if (available.length > 0) {
+              const p = evenPick(shuffle(available), 1)[0];
+              currentIterationCandidates.push({ ...p, oj });
+              currentIterationCandidateKeys.add(`${oj}:${p.id}`);
+            }
+          } catch (err) {
+            console.warn(`Failed to fetch candidates from ${oj}:`, err);
+          }
         }
-      } catch (err) {
-        console.warn(`Failed to fetch problems from ${oj}:`, err);
+      } else if (ojs.length === 1) {
+        // Fetch 2 from the single selected judge
+        const oj = ojs[0];
+        try {
+          const pool = await getCachedPool(oj, range);
+          const available = pool.filter((p) => {
+            const key = `${oj}:${p.id}`;
+            return !chosenProblemIds.has(key) && !currentIterationCandidateKeys.has(key);
+          });
+          if (available.length > 0) {
+            const selected = evenPick(shuffle(available), Math.min(2, available.length));
+            selected.forEach((p) => {
+              currentIterationCandidates.push({ ...p, oj });
+              currentIterationCandidateKeys.add(`${oj}:${p.id}`);
+            });
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch candidates from ${oj}:`, err);
+        }
       }
     }
 
-    if (!selectedProblem || !selectedOj) {
-      throw new Error(
-        `No available problems found across selected judges (${ojs.join(", ")}) in rating range ${range.min}-${range.max}`
-      );
+    const shuffledCandidates = shuffle(currentIterationCandidates);
+
+    // Verify all candidates in parallel:
+    //   - AtCoder: must have an English problem statement
+    //   - Codeforces: must exist and be accessible on the contest API
+    const verifyResults = await Promise.all(
+      shuffledCandidates.map((c) =>
+        c.oj === "atcoder"
+          ? canScrapeEnglish(c.id)
+          : canScrapeCodeforcesEnglish(c.id)
+      )
+    );
+    const validCandidateKeys = new Set(
+      shuffledCandidates
+        .filter((_, idx) => verifyResults[idx])
+        .map((c) => `${c.oj}:${c.id.toLowerCase()}`)
+    );
+
+    for (const candidate of shuffledCandidates) {
+      if (chosenProblems.length >= totalCount) break;
+
+      const key = `${candidate.oj}:${candidate.id}`;
+      if (chosenProblemIds.has(key)) continue;
+
+      // Skip problems that failed verification
+      if (!validCandidateKeys.has(`${candidate.oj}:${candidate.id.toLowerCase()}`)) {
+        console.log(`[generator] Skipping ${candidate.oj}:${candidate.id} — failed scrape/existence check`);
+        continue;
+      }
+
+      const hasSubmission = attemptedByOj[candidate.oj]?.has(candidate.id.toLowerCase());
+      if (!hasSubmission) {
+        chosenProblems.push(candidate);
+        chosenProblemIds.add(key);
+
+        if (onProgress) {
+          await onProgress(chosenProblems.length);
+        }
+      }
     }
 
-    const externalId = selectedProblem.id;
-    const problemId = buildProblemId(selectedOj, externalId);
+    if (chosenProblems.length === totalCount) break;
+  }
 
-    problems.push({
+  if (chosenProblems.length < totalCount) {
+    throw new Error(`No available problems found within this settings.`);
+  }
+
+  const problems: ContestProblem[] = chosenProblems.map((selectedProblem, i) => {
+    const externalId = selectedProblem.id;
+    const problemId = `${selectedProblem.oj}:${externalId}`;
+    return {
       id: problemId,
-      oj: selectedOj,
+      oj: selectedProblem.oj,
       externalId,
       title: selectedProblem.title,
       url: selectedProblem.url,
@@ -148,8 +229,8 @@ export async function generateProblemSet({
       order: i,
       points: DEFAULT_POINTS,
       visible: settings.mode === "standard" || i === 0,
-    });
-  }
+    };
+  });
 
   const isScoreBased = settings.rules.rankingType === "score";
   const scoreList = buildScoreList(settings, totalCount);

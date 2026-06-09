@@ -100,6 +100,7 @@ export type Contest = {
   nextProblemUnlockedAt: number | null;
   startRequestedAt?: number | null;
   errorMsg?: string | null;
+  problemsGeneratedCount?: number | null;
 };
 
 export type ScoreboardProblemState = {

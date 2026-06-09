@@ -37,7 +37,7 @@ export default function Home() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
-          Optimized Synchronous Contest Engine
+            Optimized Synchronous Contest Engine
         </div>
 
         <h1 className="text-5xl md:text-8xl font-black tracking-tight leading-[1.05] max-w-5xl mx-auto">
