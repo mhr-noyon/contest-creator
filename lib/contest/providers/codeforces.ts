@@ -34,7 +34,13 @@ async function getCodeforcesProblems() {
   if (!res.ok) {
     throw new Error("Codeforces problems failed to fetch");
   }
-  const data = await res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    console.error("Failed to parse Codeforces problemset JSON:", err);
+    throw new Error("Codeforces problemset API returned an invalid response");
+  }
   if (data.status !== "OK") {
     throw new Error("Codeforces problemset unavailable");
   }
@@ -67,7 +73,13 @@ export const codeforcesProvider: OJProviderInterface = {
   async fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number): Promise<ContestSubmission[]> {
     const url = `${CF_SUBMISSION_URL}?handle=${encodeURIComponent(handle)}&from=1&count=10000`;
     const res = await fetch(url, { cache: "no-store" });
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch (err) {
+      console.error("Failed to parse Codeforces submissions JSON:", err);
+      throw new Error("Codeforces submissions API returned an invalid response");
+    }
 
     console.log("Codeforces Url: ", url);
     console.log("Codeforces fromEpochSeconds: ", sinceEpochSeconds);

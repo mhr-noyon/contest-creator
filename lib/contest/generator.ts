@@ -1,6 +1,7 @@
 import { getProvider } from "@/lib/contest/providers";
 import { ContestProblem, ContestSettings, ContestHandle, DifficultyRange, OJName } from "@/lib/contest/types";
 import { clamp } from "@/lib/contest/utils";
+import { canScrapeEnglish, canScrapeCodeforcesEnglish } from "@/lib/contest/problems";
 
 const DEFAULT_POINTS = 0;
 
@@ -168,11 +169,33 @@ export async function generateProblemSet({
 
     const shuffledCandidates = shuffle(currentIterationCandidates);
 
+    // Verify all candidates in parallel:
+    //   - AtCoder: must have an English problem statement
+    //   - Codeforces: must exist and be accessible on the contest API
+    const verifyResults = await Promise.all(
+      shuffledCandidates.map((c) =>
+        c.oj === "atcoder"
+          ? canScrapeEnglish(c.id)
+          : canScrapeCodeforcesEnglish(c.id)
+      )
+    );
+    const validCandidateKeys = new Set(
+      shuffledCandidates
+        .filter((_, idx) => verifyResults[idx])
+        .map((c) => `${c.oj}:${c.id.toLowerCase()}`)
+    );
+
     for (const candidate of shuffledCandidates) {
       if (chosenProblems.length >= totalCount) break;
 
       const key = `${candidate.oj}:${candidate.id}`;
       if (chosenProblemIds.has(key)) continue;
+
+      // Skip problems that failed verification
+      if (!validCandidateKeys.has(`${candidate.oj}:${candidate.id.toLowerCase()}`)) {
+        console.log(`[generator] Skipping ${candidate.oj}:${candidate.id} — failed scrape/existence check`);
+        continue;
+      }
 
       const hasSubmission = attemptedByOj[candidate.oj]?.has(candidate.id.toLowerCase());
       if (!hasSubmission) {

@@ -5,6 +5,14 @@ import { redis } from "@/lib/store";
 const AC_PROBLEMS_URL = "https://kenkoooo.com/atcoder/resources/merged-problems.json";
 const AC_MODELS_URL = "https://kenkoooo.com/atcoder/resources/problem-models.json";
 const AC_SUBMISSIONS_URL = "https://kenkoooo.com/atcoder/atcoder-api/v3/user/submissions";
+const AC_CONTEST_SUBMISSIONS_URL = (contestId: string, page: number) =>
+  `https://atcoder.jp/contests/${contestId}/submissions/?page=${page}`;
+const AC_SYNC_PAGES = 5;
+
+const ATCODER_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+};
 
 function difficultyToRating(difficulty?: number | null): number | null {
   if (difficulty === null || difficulty === undefined) return null;
@@ -37,6 +45,105 @@ function mapACVerdict(result?: string): "OK" | "WA" | "TLE" | "MLE" | "RE" | "CE
     case "CE": return "CE";
     default: return "OTHER";
   }
+}
+
+export function getAtCoderContestIdFromProblemUrl(url: string): string | null {
+  const match = url.match(/\/contests\/([^/]+)\/tasks\//i);
+  return match ? match[1] : null;
+}
+
+type ParsedAtCoderSubmission = {
+  submissionId: string;
+  handle: string;
+  problemId: string;
+  verdict: "OK" | "WA" | "TLE" | "MLE" | "RE" | "CE" | "OTHER";
+  submittedAt: number;
+};
+
+function parseAtCoderSubmissionListPage(html: string): ParsedAtCoderSubmission[] {
+  const rows: ParsedAtCoderSubmission[] = [];
+  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let rowMatch: RegExpExecArray | null;
+
+  while ((rowMatch = rowRegex.exec(html)) !== null) {
+    const row = rowMatch[1];
+    const submissionIdMatch = row.match(/\/submissions\/(\d+)/i);
+    const handleMatch = row.match(/\/users\/([^"'<>\s]+)/i);
+    const problemMatch = row.match(/\/tasks\/([^"'<>\s]+)/i);
+    const verdictMatch =
+      row.match(/<span[^>]*class="[^"]*(?:label|badge)[^"]*"[^>]*>\s*([^<]+)\s*<\/span>/i) ||
+      row.match(/<td[^>]*>\s*(AC|WA|TLE|MLE|RE|CE|OTHER)\s*<\/td>/i);
+    const timeMatch = row.match(/<time[^>]*datetime="([^"]+)"[^>]*>/i) || row.match(/<time[^>]*>([^<]+)<\/time>/i);
+
+    if (!submissionIdMatch || !handleMatch || !problemMatch || !verdictMatch || !timeMatch) {
+      continue;
+    }
+
+    const submittedAt = new Date(timeMatch[1]).getTime();
+    if (!Number.isFinite(submittedAt)) {
+      continue;
+    }
+
+    rows.push({
+      submissionId: submissionIdMatch[1],
+      handle: handleMatch[1],
+      problemId: problemMatch[1],
+      verdict: mapACVerdict(verdictMatch[1].trim()),
+      submittedAt,
+    });
+  }
+
+  return rows;
+}
+
+export async function fetchAtCoderContestSubmissions(params: {
+  contestId: string;
+  handles: string[];
+  startTimeMs: number;
+  endTimeMs: number;
+  pages?: number;
+}): Promise<ContestSubmission[]> {
+  const { contestId, handles, startTimeMs, endTimeMs, pages = AC_SYNC_PAGES } = params;
+  const handleSet = new Set(handles.map((handle) => handle.toLowerCase()));
+  const seenSubmissionIds = new Set<string>();
+  const submissions: ContestSubmission[] = [];
+
+  for (let page = 1; page <= Math.max(1, pages); page += 1) {
+    const url = AC_CONTEST_SUBMISSIONS_URL(contestId, page);
+    const res = await fetch(url, { headers: ATCODER_HEADERS, cache: "no-store" });
+
+    if (!res.ok) {
+      if (page === 1) {
+        throw new Error(`AtCoder submissions page ${page} failed with status ${res.status}`);
+      }
+      console.warn(`Skipping AtCoder submissions page ${page} because it returned ${res.status}`);
+      continue;
+    }
+
+    const html = await res.text();
+    const rows = parseAtCoderSubmissionListPage(html);
+
+    for (const row of rows) {
+      if (!handleSet.has(row.handle.toLowerCase())) continue;
+      if (row.submittedAt < startTimeMs || row.submittedAt > endTimeMs) continue;
+
+      const uniqueId = `ac-${row.submissionId}`;
+      if (seenSubmissionIds.has(uniqueId)) continue;
+      seenSubmissionIds.add(uniqueId);
+
+      submissions.push({
+        id: uniqueId,
+        contestId: "",
+        oj: "atcoder",
+        handle: row.handle,
+        problemId: row.problemId,
+        verdict: row.verdict,
+        submittedAt: row.submittedAt,
+      });
+    }
+  }
+
+  return submissions.sort((a, b) => a.submittedAt - b.submittedAt);
 }
 
 let cachedProblemsList: OJProblem[] | null = null;
@@ -82,8 +189,15 @@ async function getAtCoderProblems(): Promise<OJProblem[]> {
     throw new Error(`AtCoder problems or models failed to fetch: problems=${problemsRes.status}, models=${modelsRes.status}`);
   }
 
-  const problems = await problemsRes.json();
-  const models = await modelsRes.json();
+  let problems: any[] = [];
+  let models: any = {};
+  try {
+    problems = await problemsRes.json();
+    models = await modelsRes.json();
+  } catch (err) {
+    console.error("Failed to parse AtCoder problems/models JSON (possibly blocked by Cloudflare/HTML response):", err);
+    throw new Error("AtCoder problems/models API returned an invalid response");
+  }
 
   const processed: OJProblem[] = (problems || [])
     .map((problem: any) => {
@@ -143,7 +257,13 @@ export const atcoderProvider: OJProviderInterface = {
       throw new Error("AtCoder submissions unavailable");
     }
 
-    const data = await res.json();
+    let data: any[] = [];
+    try {
+      data = await res.json();
+    } catch (err) {
+      console.error("Failed to parse AtCoder submissions JSON (possibly blocked by Cloudflare/HTML response):", err);
+      throw new Error("AtCoder submissions API returned an invalid response");
+    }
 
     console.log("Atcoder submissions", data.slice(0, 2));
 
