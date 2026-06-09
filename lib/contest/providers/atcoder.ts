@@ -128,7 +128,7 @@ export const atcoderProvider: OJProviderInterface = {
       return rating >= filter.minRating && rating <= filter.maxRating;
     });
   },
-  async fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number): Promise<ContestSubmission[]> {
+  async fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number, limit?: number): Promise<ContestSubmission[]> {
     const fromSeconds = sinceEpochSeconds ?? 0;
     const url = `${AC_SUBMISSIONS_URL}?user=${encodeURIComponent(handle)}&from_second=${fromSeconds}`;
     const headers = {

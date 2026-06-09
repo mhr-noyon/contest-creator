@@ -1,8 +1,6 @@
 import { ContestSubmission } from "@/lib/contest/types";
 import { OJProblem, OJProviderInterface, ProblemFilter } from "@/lib/contest/providers/types";
-
-const CF_PROBLEMSET_URL = "https://codeforces.com/api/problemset.problems";
-const CF_SUBMISSION_URL = "https://codeforces.com/api/user.status";
+import crypto from "crypto";
 
 function normalizeProblemId(contestId: number | string, index: string): string {
   return `${contestId}${index}`;
@@ -22,6 +20,42 @@ function mapCFVerdict(verdict?: string): "OK" | "WA" | "TLE" | "MLE" | "RE" | "C
   }
 }
 
+function buildCFUrl(methodName: string, params: Record<string, string | number>): string {
+  const apiKey = process.env.CF_API_KEY;
+  const apiSecret = process.env.CF_SECRET_KEY;
+
+  if (!apiKey || !apiSecret) {
+    const query = Object.entries(params)
+      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+      .join("&");
+    return `https://codeforces.com/api/${methodName}?${query}`;
+  }
+
+  const time = Math.floor(Date.now() / 1000);
+  const allParams: Record<string, string | number> = {
+    ...params,
+    apiKey,
+    time,
+  };
+
+  const sortedKeys = Object.keys(allParams).sort();
+  const sortedQuery = sortedKeys
+    .map((k) => `${k}=${allParams[k]}`)
+    .join("&");
+
+  const rand = Math.random().toString(36).substring(2, 8).padStart(6, "0");
+
+  const hashSource = `${rand}/${methodName}?${sortedQuery}#${apiSecret}`;
+  const hash = crypto.createHash("sha512").update(hashSource).digest("hex");
+
+  const apiSig = `${rand}${hash}`;
+  return `https://codeforces.com/api/${methodName}?${sortedQuery}&apiSig=${apiSig}`;
+}
+
+const headers = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+};
+
 let cachedProblems: any = null;
 let lastFetchedAt = 0;
 
@@ -30,7 +64,8 @@ async function getCodeforcesProblems() {
   if (cachedProblems && (now - lastFetchedAt < 5 * 60 * 1000)) {
     return cachedProblems;
   }
-  const res = await fetch(CF_PROBLEMSET_URL, { cache: "no-store" });
+  const url = buildCFUrl("problemset.problems", {});
+  const res = await fetch(url, { headers, cache: "no-store" });
   if (!res.ok) {
     throw new Error("Codeforces problems failed to fetch");
   }
@@ -64,9 +99,10 @@ export const codeforcesProvider: OJProviderInterface = {
       oj: "codeforces",
     }));
   },
-  async fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number): Promise<ContestSubmission[]> {
-    const url = `${CF_SUBMISSION_URL}?handle=${encodeURIComponent(handle)}&from=1&count=10000`;
-    const res = await fetch(url, { cache: "no-store" });
+  async fetchRecentSubmissions(handle: string, sinceEpochSeconds?: number, limit?: number): Promise<ContestSubmission[]> {
+    const count = limit ?? 200;
+    const url = buildCFUrl("user.status", { handle, from: 1, count });
+    const res = await fetch(url, { headers, cache: "no-store" });
     const data = await res.json();
 
     console.log("Codeforces Url: ", url);
@@ -95,8 +131,8 @@ export const codeforcesProvider: OJProviderInterface = {
   },
   async verifyHandle(handle: string): Promise<boolean> {
     try {
-      const url = `https://codeforces.com/api/user.info?handles=${encodeURIComponent(handle)}`;
-      const res = await fetch(url, { cache: "no-store" });
+      const url = buildCFUrl("user.info", { handles: handle });
+      const res = await fetch(url, { headers, cache: "no-store" });
       if (!res.ok) return false;
       const data = await res.json();
       return data.status === "OK";

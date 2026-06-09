@@ -179,6 +179,7 @@ export async function POST(
     contest.status = "starting";
     contest.startRequestedAt = Date.now();
     contest.errorMsg = null;
+    contest.problemsGeneratedCount = 0;
     await setContest(contestId, contest);
 
     try {
@@ -188,6 +189,13 @@ export async function POST(
       const problems = await generateProblemSet({
         settings: contest.settings,
         handles: allHandles,
+        onProgress: async (count) => {
+          const current = await getContest(contestId);
+          if (current && current.status === "starting") {
+            current.problemsGeneratedCount = count;
+            await setContest(contestId, current);
+          }
+        },
       });
 
       const current = await getContest(contestId);
@@ -198,6 +206,7 @@ export async function POST(
         current.currentProblemIndex = 0;
         current.nextProblemUnlockedAt = null;
         current.errorMsg = null;
+        current.problemsGeneratedCount = problems.length;
         await setContest(contestId, current);
         // Use the updated contest object for the response
         contest.problems = current.problems;
@@ -206,6 +215,7 @@ export async function POST(
         contest.currentProblemIndex = current.currentProblemIndex;
         contest.nextProblemUnlockedAt = current.nextProblemUnlockedAt;
         contest.errorMsg = current.errorMsg;
+        contest.problemsGeneratedCount = current.problemsGeneratedCount;
       }
     } catch (err: any) {
       console.error("Error generating problem set:", err);

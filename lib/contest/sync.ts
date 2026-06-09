@@ -10,7 +10,7 @@ export async function syncContestSubmissions(contest: Contest): Promise<Contest>
   const problemMap = new Map<string, string>();
 
   contest.problems.forEach((problem) => {
-    problemMap.set(`${problem.oj}:${problem.externalId}`, problem.id);
+    problemMap.set(`${problem.oj}:${problem.externalId.toLowerCase()}`, problem.id);
   });
 
   const newSubmissions: ContestSubmission[] = [];
@@ -18,25 +18,34 @@ export async function syncContestSubmissions(contest: Contest): Promise<Contest>
 
   const seenHandles = new Set<string>();
 
-  for (const participant of contest.participants) {
-    for (const handleEntry of participant.handles) {
-      const handleKey = buildHandleKey(handleEntry.oj, handleEntry.handle);
-      if (seenHandles.has(handleKey)) continue;
-      seenHandles.add(handleKey);
+  const allHandles = [
+    ...contest.handles,
+    ...contest.participants.flatMap((p) => p.handles),
+  ];
 
-      const provider = getProvider(handleEntry.oj);
-      
-      // Calculate a safe starting time: 10 minutes (600 seconds) before the contest started.
-      const contestStartSeconds = Math.floor(startTime / 1000) - 600;
-      
-      // Go back by 10 minutes (600 seconds) from the last fetched time as a safety margin for scraping delays.
-      const lastFetched = contest.sync.lastFetchedAtByHandle[handleKey];
-      const since = lastFetched ? Math.max(contestStartSeconds, lastFetched - 600) : contestStartSeconds;
+  for (const handleEntry of allHandles) {
+    const handleKey = buildHandleKey(handleEntry.oj, handleEntry.handle);
+    if (seenHandles.has(handleKey)) continue;
+    seenHandles.add(handleKey);
 
-      const recent = await provider.fetchRecentSubmissions(handleEntry.handle, since);
+    const provider = getProvider(handleEntry.oj);
+    
+    // Calculate a safe starting time: 10 minutes (600 seconds) before the contest started.
+    const contestStartSeconds = Math.floor(startTime / 1000) - 600;
+    
+    // Go back by 10 minutes (600 seconds) from the last fetched time as a safety margin for scraping delays.
+    const lastFetched = contest.sync.lastFetchedAtByHandle[handleKey];
+    let since = lastFetched ? Math.max(contestStartSeconds, lastFetched - 600) : contestStartSeconds;
+
+    // For AtCoder (Kenkoooo API), scrape delays can be long. We must always check from the contest start time.
+    if (handleEntry.oj === "atcoder") {
+      since = contestStartSeconds;
+    }
+
+    const recent = await provider.fetchRecentSubmissions(handleEntry.handle, since, 200);
 
       recent.forEach((submission) => {
-        const problemId = problemMap.get(`${submission.oj}:${submission.problemId}`);
+        const problemId = problemMap.get(`${submission.oj}:${submission.problemId.toLowerCase()}`);
         if (!problemId) return;
 
         const uniqueId = `${submission.oj}:${submission.id}`;
@@ -53,7 +62,6 @@ export async function syncContestSubmissions(contest: Contest): Promise<Contest>
 
       contest.sync.lastFetchedAtByHandle[handleKey] = nowSeconds;
     }
-  }
 
   const mergedSubmissions = [...contest.submissions, ...newSubmissions].filter(
     (submission) => submission.submittedAt >= startTime

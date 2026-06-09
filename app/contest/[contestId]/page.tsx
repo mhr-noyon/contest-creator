@@ -49,7 +49,10 @@ export default function ContestPage() {
   const [starting, setStarting] = useState(false);
   const [startCountdown, setStartCountdown] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const [startingCountdown, setStartingCountdown] = useState(20);
+  const [startingCountdown, setStartingCountdown] = useState(10);
+  const [lobbyCountdown, setLobbyCountdown] = useState<number | null>(null);
+  const [showContestStarted, setShowContestStarted] = useState(false);
+  const [syncingSubmissions, setSyncingSubmissions] = useState(false);
 
   // Consolidated Tab State
   const [activeTab, setActiveTab] = useState<"problems" | "leaderboard" | "status" | "info">("problems");
@@ -152,21 +155,90 @@ export default function ContestPage() {
   }, [contestId]);
 
   // Tick starting countdown when contest status is "starting"
+  // Starts at 10 seconds and auto-extends by 10 seconds (up to 90s max) if backend is still generating.
   useEffect(() => {
     if (contest?.status !== "starting" || !contest?.startRequestedAt) {
-      setStartingCountdown(30);
+      setStartingCountdown(10);
       return;
     }
     const tick = () => {
       const adjustedNow = Date.now() - serverOffsetRef.current;
       const elapsed = Math.floor((adjustedNow - (contest.startRequestedAt || 0)) / 1000);
-      const remaining = Math.max(0, 30 - elapsed);
+      let limit = 10;
+      while (elapsed >= limit && limit < 90) {
+        limit += 10;
+      }
+      const remaining = Math.max(0, limit - elapsed);
       setStartingCountdown(remaining);
     };
     tick();
     const interval = setInterval(tick, 250);
     return () => clearInterval(interval);
   }, [contest?.status, contest?.startRequestedAt]);
+
+  // Manage the starting/waiting lobby countdown seen by the user
+  useEffect(() => {
+    if (!contest) return;
+
+    if (contest.status === "waiting") {
+      setLobbyCountdown(null);
+      setShowContestStarted(false);
+      return;
+    }
+
+    if (contest.status === "starting") {
+      setLobbyCountdown(startingCountdown);
+      setShowContestStarted(false);
+      return;
+    }
+
+    if (contest.status === "running") {
+      const adjustedNow = Date.now() - serverOffsetRef.current;
+      const isPastStart = contest.settings.startTime && (adjustedNow >= contest.settings.startTime);
+
+      if (isPastStart) {
+        setShowContestStarted(true);
+        setLobbyCountdown(null);
+      } else {
+        // Under startup countdown!
+        setLobbyCountdown((prev) => {
+          if (prev === null) {
+            // Compute remaining seconds
+            const remaining = Math.max(0, Math.ceil(((contest.settings.startTime || 0) - adjustedNow) / 1000));
+            // Wait at least 5 seconds
+            return remaining > 5 ? remaining : 5;
+          }
+          return prev;
+        });
+      }
+    }
+
+    if (contest.status === "finished") {
+      setShowContestStarted(true);
+      setLobbyCountdown(null);
+    }
+  }, [contest?.status, contest?.settings.startTime, startingCountdown]);
+
+  // Tick down lobby countdown every second
+  useEffect(() => {
+    if (lobbyCountdown === null || lobbyCountdown <= 0) {
+      if (lobbyCountdown === 0 && contest?.status === "running") {
+        setShowContestStarted(true);
+      }
+      return;
+    }
+    const timer = setTimeout(() => {
+      setLobbyCountdown((prev) => (prev !== null ? Math.max(0, prev - 1) : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [lobbyCountdown, contest?.status]);
+
+  // Trigger sync on loading leaderboard
+  useEffect(() => {
+    if (activeTab === "leaderboard" && contest?.status === "running") {
+      triggerSync();
+    }
+  }, [activeTab, contest?.status]);
 
   // Owner auto-abort starting if countdown reaches 0
   useEffect(() => {
@@ -304,9 +376,9 @@ export default function ContestPage() {
     }
 
     fetchContest();
-    const interval = setInterval(fetchContest, refreshIntervalMs);
+    const interval = setInterval(fetchContest, contest?.status === "starting" ? 1000 : refreshIntervalMs);
     return () => clearInterval(interval);
-  }, [contestId, ownerSnapshotName, joinName]);
+  }, [contestId, ownerSnapshotName, joinName, contest?.status]);
 
   // Auto authorize if contest does not require password
   useEffect(() => {
@@ -552,6 +624,27 @@ export default function ContestPage() {
     }
   }
 
+  async function triggerSync() {
+    if (syncingSubmissions || !contestId || contest?.status !== "running") return;
+    setSyncingSubmissions(true);
+    try {
+      const res = await fetch(`/api/contest/${contestId}/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.contest) {
+          setContest(data.contest);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to sync submissions:", err);
+    } finally {
+      setSyncingSubmissions(false);
+    }
+  }
+
   if (error) {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center">
@@ -592,7 +685,7 @@ export default function ContestPage() {
     );
   }
 
-  if (contest.status === "waiting" || contest.status === "starting") {
+  if (contest.status === "waiting" || contest.status === "starting" || !showContestStarted) {
     const hasJoined = isOwner || Boolean(selfParticipant);
     const showJoinForm = !isOwner && !selfParticipant;
 
@@ -608,15 +701,43 @@ export default function ContestPage() {
           </header>
 
           {contest.status === "starting" && (
-            <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-3 animate-pulse">
+            <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-4 animate-pulse">
               <h2 className="text-2xl font-bold text-emerald-200">Generating problems...</h2>
+              
+              <div className="text-sm text-neutral-300 flex items-center justify-center gap-2">
+                <span>Problems Generated:</span>
+                <span className="font-mono text-base font-bold text-emerald-400">
+                  {contest.problemsGeneratedCount ?? 0}
+                </span>
+                <span className="text-neutral-500">/</span>
+                <span className="font-mono text-neutral-400">
+                  {contest.settings.numberOfProblems}
+                </span>
+              </div>
+
               <p className="text-sm text-neutral-300">
-                The contest will start in <span className="font-mono text-lg font-bold text-white">{startingCountdown}s</span>. Please wait.
+                Checking pool & verifying participant submissions... Retrying in <span className="font-mono text-lg font-bold text-white">{startingCountdown}s</span>.
+              </p>
+              
+              <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="bg-emerald-400 h-full transition-all duration-[250ms] ease-linear" 
+                  style={{ width: `${(startingCountdown / 10) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {contest.status === "running" && !showContestStarted && (
+            <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-4">
+              <h2 className="text-2xl font-bold text-emerald-200">Problems generated!</h2>
+              <p className="text-sm text-neutral-300">
+                The contest starts in <span className="font-mono text-lg font-bold text-white">{lobbyCountdown}s</span>. Get ready!
               </p>
               <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
                 <div 
                   className="bg-emerald-400 h-full transition-all duration-[250ms] ease-linear" 
-                  style={{ width: `${(startingCountdown / 20) * 100}%` }}
+                  style={{ width: `${(Math.min(5, lobbyCountdown || 5) / 5) * 100}%` }}
                 />
               </div>
             </div>
@@ -856,7 +977,7 @@ export default function ContestPage() {
           </div>
         </header>
 
-        {startCountdown > 0 && (
+        {startCountdown > 0 && !showContestStarted && (
           <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-5 py-3 text-emerald-100 font-semibold">
             Contest starts in {startCountdown}s. Get ready!
           </div>
@@ -935,10 +1056,27 @@ export default function ContestPage() {
         {activeTab === "leaderboard" && (
           <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <h2 className="text-2xl font-bold">Leaderboard</h2>
-              <p className="text-sm text-neutral-400">
-                {scoreboard ? `Updated ${elapsedSeconds}s ago` : "Live updates every few seconds"}
-              </p>
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold">Leaderboard</h2>
+                {syncingSubmissions && (
+                  <span className="text-xs text-emerald-400 animate-pulse flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    Syncing...
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={triggerSync}
+                  disabled={syncingSubmissions || contest?.status !== "running"}
+                  className="bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-50 transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  {syncingSubmissions ? "⟳ Syncing..." : "↻ Refresh"}
+                </button>
+                <p className="text-sm text-neutral-400">
+                  {scoreboard ? `Updated ${elapsedSeconds}s ago` : "Live updates every few seconds"}
+                </p>
+              </div>
             </div>
             
             <div className="mt-6">
