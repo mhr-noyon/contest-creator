@@ -17,7 +17,7 @@ export default function Navbar() {
               ⚡
             </div>
             <span className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-neutral-100 to-neutral-400">
-              BlitzChallenge
+              ContestHub
             </span>
           </Link>
 

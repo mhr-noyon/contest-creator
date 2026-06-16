@@ -43,21 +43,21 @@ export default function Home() {
         <h1 className="text-5xl md:text-8xl font-black tracking-tight leading-[1.05] max-w-5xl mx-auto">
           Create real-time
           <span className="block text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-cyan-300 to-amber-300">
-            programming duels.
+            custom contests.
           </span>
         </h1>
 
         <p className="mt-8 text-lg md:text-xl text-neutral-400 max-w-3xl mx-auto leading-relaxed">
           Craft custom competitive events across Codeforces and AtCoder. Exclude solved problems, 
-          configure ICPC-style scoring, and duel friends on a live-updating scoreboard.
+          configure ICPC-style scoring, and rank players on a live-updating scoreboard.
         </p>
 
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
-            href="/create"
+            href="/contest"
             className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-black font-extrabold text-lg hover:shadow-[0_0_30px_rgba(52,211,153,0.3)] hover:scale-[1.02] transition-all duration-300 text-center"
           >
-            Start a Duel
+            Join Contest
           </Link>
           <Link
             href="/contest/create"
@@ -91,7 +91,7 @@ export default function Home() {
       {/* 2. Scoreboard Preview Section */}
       <section id="preview" className="relative z-10 max-w-6xl mx-auto px-6 py-20 border-t border-white/5">
         <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-5xl font-bold">Interactive Duel standings</h2>
+          <h2 className="text-3xl md:text-5xl font-bold">Interactive Contest standings</h2>
           <p className="text-neutral-400 mt-3 max-w-xl mx-auto">
             Live preview of the ICPC leaderboard engine syncing participant outcomes.
           </p>
@@ -379,7 +379,7 @@ export default function Home() {
           <p className="text-cyan-300 text-sm uppercase tracking-widest font-semibold">Judge Integrations</p>
           <h2 className="text-3xl md:text-5xl font-bold mt-2">Multiple platforms. One lobby.</h2>
           <p className="text-neutral-400 mt-3 max-w-xl mx-auto">
-            Blitz Challenge handles fetching, filtering, and scoring problems from distinct judges.
+            Contest Hub handles fetching, filtering, and scoring problems from distinct judges.
           </p>
         </div>
 
@@ -442,7 +442,7 @@ export default function Home() {
             <div className="w-6 h-6 rounded-lg bg-emerald-400 flex items-center justify-center font-bold text-black text-xs">
               ⚡
             </div>
-            <span className="font-bold text-neutral-300">BlitzChallenge</span>
+            <span className="font-bold text-neutral-300">ContestHub</span>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-6">
@@ -453,7 +453,7 @@ export default function Home() {
           </div>
 
           <p className="text-xs text-neutral-600">
-            &copy; {new Date().getFullYear()} BlitzChallenge. All rights reserved.
+            &copy; {new Date().getFullYear()} ContestHub. All rights reserved.
           </p>
         </div>
       </footer>
