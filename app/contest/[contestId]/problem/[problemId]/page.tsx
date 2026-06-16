@@ -197,12 +197,20 @@ export default function ProblemPage() {
               🌐 Open on {problem.oj === "atcoder" ? "AtCoder" : "Codeforces"}
             </a>
             {problem.oj === "atcoder" && (
-              <Link
-                href={`/contest/${contestId}?tab=submit&problemId=${problem.problemId}`}
-                className="px-3.5 py-1.5 bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md text-center"
-              >
-                📝 Submit ID
-              </Link>
+              <>
+                <Link
+                  href={`/contest/${contestId}?tab=submit&problemId=${problem.problemId}`}
+                  className="px-3.5 py-1.5 bg-neutral-800 border border-white/10 hover:border-white/30 text-neutral-200 hover:text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm text-center whitespace-nowrap"
+                >
+                  📝 Verify ID
+                </Link>
+                <Link
+                  href={`/contest/${contestId}?tab=submit-code&problemId=${problem.problemId}`}
+                  className="px-3.5 py-1.5 bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md text-center whitespace-nowrap"
+                >
+                  ⚡ Submit Code
+                </Link>
+              </>
             )}
           </div>
         </div>

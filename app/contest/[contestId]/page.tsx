@@ -6,6 +6,7 @@ import Link from "next/link";
 import Script from "next/script";
 import ProblemView from "@/components/contest/ProblemView";
 import SubmitView from "@/components/contest/SubmitView";
+import SubmitCodeView from "@/components/contest/SubmitCodeView";
 import {
   Contest,
   ContestProblem,
@@ -61,7 +62,7 @@ export default function ContestPage() {
   const [syncingSubmissions, setSyncingSubmissions] = useState(false);
 
   // Consolidated Tab State
-  const [activeTab, setActiveTab] = useState<"problems" | "leaderboard" | "status" | "info" | "submit">("problems");
+  const [activeTab, setActiveTab] = useState<"problems" | "leaderboard" | "status" | "info" | "submit" | "submit-code">("problems");
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
   const [submitInitialProblemId, setSubmitInitialProblemId] = useState<string | null>(null);
   const [scoreboard, setScoreboard] = useState<Scoreboard | null>(null);
@@ -100,7 +101,7 @@ export default function ContestPage() {
   const buttonGhostClass =
     "text-xs uppercase tracking-widest text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer";
   
-  const navLinkClass = (tab: "problems" | "leaderboard" | "status" | "info" | "submit") =>
+  const navLinkClass = (tab: "problems" | "leaderboard" | "status" | "info" | "submit" | "submit-code") =>
     `px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-200 cursor-pointer ${
       activeTab === tab
         ? "border-emerald-400/60 text-emerald-200 bg-emerald-500/10 shadow-sm"
@@ -113,24 +114,24 @@ export default function ContestPage() {
       const params = new URLSearchParams(window.location.search);
       const tab = params.get("tab");
       const probId = params.get("problemId");
-      if (tab === "problems" || tab === "leaderboard" || tab === "status" || tab === "info" || tab === "submit") {
+      if (tab === "problems" || tab === "leaderboard" || tab === "status" || tab === "info" || tab === "submit" || tab === "submit-code") {
         setActiveTab(tab as any);
       }
       if (probId) {
         setSelectedProblemId(probId);
-        if (tab === "submit") {
+        if (tab === "submit" || tab === "submit-code") {
           setSubmitInitialProblemId(probId);
         }
       }
     }
   }, []);
 
-  const handleTabChange = (tab: "problems" | "leaderboard" | "status" | "info" | "submit") => {
+  const handleTabChange = (tab: "problems" | "leaderboard" | "status" | "info" | "submit" | "submit-code") => {
     setActiveTab(tab);
     if (tab !== "problems") {
       setSelectedProblemId(null);
     }
-    if (tab !== "submit") {
+    if (tab !== "submit" && tab !== "submit-code") {
       setSubmitInitialProblemId(null);
     }
     if (typeof window !== "undefined") {
@@ -1021,12 +1022,20 @@ export default function ContestPage() {
                 Info
               </button>
               {contest.problems.some((p) => p.oj === "atcoder") && (
-                <button 
-                  onClick={() => handleTabChange("submit")} 
-                  className={navLinkClass("submit")}
-                >
-                  Submit
-                </button>
+                <>
+                  <button 
+                    onClick={() => handleTabChange("submit")} 
+                    className={navLinkClass("submit")}
+                  >
+                    Verify ID
+                  </button>
+                  <button 
+                    onClick={() => handleTabChange("submit-code")} 
+                    className={navLinkClass("submit-code")}
+                  >
+                    Submit Code
+                  </button>
+                </>
               )}
             </nav>
           </div>
@@ -1055,12 +1064,20 @@ export default function ContestPage() {
                 <h2 className="text-2xl font-bold">Problem list</h2>
                 <div className="flex items-center gap-3">
                   {canSyncSubmissions && contest.problems.some((p) => p.oj === "atcoder") && (
-                    <button
-                      onClick={() => handleTabChange("submit")}
-                      className="bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
-                    >
-                      📝 Verify AtCoder ID
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleTabChange("submit")}
+                        className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white border border-white/10 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                      >
+                        📝 Verify AtCoder ID
+                      </button>
+                      <button
+                        onClick={() => handleTabChange("submit-code")}
+                        className="bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                      >
+                        ⚡ Submit Code
+                      </button>
+                    </div>
                   )}
                   <p className="text-sm text-neutral-400">
                     Mode: {contest.settings.mode === "blitz" ? "Blitz progression" : "Standard"}
@@ -1146,12 +1163,20 @@ export default function ContestPage() {
               </div>
               <div className="flex items-center gap-3">
                 {canSyncSubmissions && contest.problems.some((p) => p.oj === "atcoder") && (
-                  <button
-                    onClick={() => handleTabChange("submit")}
-                    className="bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
-                  >
-                    📝 Verify AtCoder ID
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleTabChange("submit")}
+                      className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200 hover:text-white border border-white/10 text-xs font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                    >
+                      📝 Verify AtCoder ID
+                    </button>
+                    <button
+                      onClick={() => handleTabChange("submit-code")}
+                      className="bg-emerald-400 hover:bg-emerald-300 text-black text-xs font-bold px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+                    >
+                      ⚡ Submit Code
+                    </button>
+                  </div>
                 )}
                 <button
                   onClick={() => triggerSync("manual")}
@@ -1405,17 +1430,6 @@ export default function ContestPage() {
                     </div>
                   );
                 })()}
-                {/* Host */}
-                {/* <div className="rounded-2xl border border-white/10 bg-black/60 p-4">
-                  <p className="text-sm font-semibold text-white">
-                    {contest.ownerName} <span className="text-xs text-emerald-300 font-normal px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 ml-2">Host</span>
-                  </p>
-                  <div className="mt-2 space-y-1 text-xs text-neutral-400">
-                    {contest.handles.map((h, idx) => (
-                      <p key={`info-host-${idx}`}>• {h.oj}: {h.handle}</p>
-                    ))}
-                  </div>
-                </div> */}
 
                 {/* Others */}
                 {contest.participants
@@ -1446,6 +1460,24 @@ export default function ContestPage() {
             problems={contest.problems}
             onSuccess={() => {
               setSubmitInitialProblemId(null);
+              handleTabChange("leaderboard");
+            }}
+            onCancel={() => {
+              setSubmitInitialProblemId(null);
+              handleTabChange("problems");
+            }}
+          />
+        )}
+
+        {activeTab === "submit-code" && (
+          <SubmitCodeView
+            contestId={contestId}
+            displayName={joinName}
+            initialProblemId={submitInitialProblemId}
+            problems={contest.problems}
+            onSuccess={() => {
+              setSubmitInitialProblemId(null);
+              triggerSync("manual");
               handleTabChange("leaderboard");
             }}
             onCancel={() => {

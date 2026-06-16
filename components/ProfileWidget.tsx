@@ -7,6 +7,7 @@ interface ProfileData {
   name: string;
   cfHandle: string;
   atcoderHandle: string;
+  atcoderSessionId?: string;
   expiresAt: number;
 }
 
@@ -16,11 +17,13 @@ export default function ProfileWidget() {
   const [name, setName] = useState("");
   const [cfHandle, setCfHandle] = useState("");
   const [atcoderHandle, setAtcoderHandle] = useState("");
+  const [atcoderSessionId, setAtcoderSessionId] = useState("");
   
   // Track initial values to detect changes
   const [initialName, setInitialName] = useState("");
   const [initialCfHandle, setInitialCfHandle] = useState("");
   const [initialAtcoderHandle, setInitialAtcoderHandle] = useState("");
+  const [initialAtcoderSessionId, setInitialAtcoderSessionId] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -40,12 +43,15 @@ export default function ProfileWidget() {
           const n = parsed.name || "";
           const cf = parsed.cfHandle || "";
           const ac = parsed.atcoderHandle || "";
+          const sid = parsed.atcoderSessionId || "";
           setName(n);
           setCfHandle(cf);
           setAtcoderHandle(ac);
+          setAtcoderSessionId(sid);
           setInitialName(n);
           setInitialCfHandle(cf);
           setInitialAtcoderHandle(ac);
+          setInitialAtcoderSessionId(sid);
         } else {
           localStorage.removeItem("user-profile");
         }
@@ -117,6 +123,7 @@ export default function ProfileWidget() {
         name: trimmedName,
         cfHandle: trimmedCf,
         atcoderHandle: trimmedAtcoder,
+        atcoderSessionId: atcoderSessionId.trim(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
       };
 
@@ -124,6 +131,7 @@ export default function ProfileWidget() {
       setInitialName(trimmedName);
       setInitialCfHandle(trimmedCf);
       setInitialAtcoderHandle(trimmedAtcoder);
+      setInitialAtcoderSessionId(atcoderSessionId.trim());
       showToast("Profile saved successfully!", "success");
       setIsOpen(false);
     } catch (error) {
@@ -136,7 +144,8 @@ export default function ProfileWidget() {
   const hasChanges =
     name.trim() !== initialName ||
     cfHandle.trim() !== initialCfHandle ||
-    atcoderHandle.trim() !== initialAtcoderHandle;
+    atcoderHandle.trim() !== initialAtcoderHandle ||
+    atcoderSessionId.trim() !== initialAtcoderSessionId;
 
   const isButtonDisabled = loading || !hasChanges;
 
@@ -227,6 +236,22 @@ export default function ProfileWidget() {
                 placeholder="e.g. chokudai"
                 className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400 transition-colors"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1 font-semibold">
+                AtCoder Session ID (REVEL_SESSION)
+              </label>
+              <input
+                type="password"
+                value={atcoderSessionId}
+                onChange={(e) => setAtcoderSessionId(e.target.value)}
+                placeholder="e.g. REVEL_SESSION cookie value"
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400 transition-colors"
+              />
+              <span className="text-[9px] text-neutral-500 block mt-1 leading-tight">
+                To find this: Log into AtCoder.jp, open DevTools (F12) &rarr; Application &rarr; Cookies &rarr; copy the value of "REVEL_SESSION".
+              </span>
             </div>
 
             <button

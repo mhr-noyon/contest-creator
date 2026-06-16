@@ -13,7 +13,7 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Blitz Challenge",
+  title: "Contest Hub",
   description: "Create and join coding contests with your friends.",
 };
 
