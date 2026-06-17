@@ -371,6 +371,7 @@ export default function ProblemPage() {
                 id="problem-html"
                 dangerouslySetInnerHTML={{
                   __html: problem.html
+                    .replace(/<p>\s*Score\s*:\s*(?:<var\b[^>]*>)?\s*\d+\s*(?:<\/var>)?\s*points?\s*<\/p>/gi, "")
                     .replace(/<var\b[^>]*>([\s\S]*?)<\/var>/gi, (_, g1) => `\\(${g1}\\)`)
                     .replace(/\\\(([\s\S]*?)\\\)/g, (_, g1) => `<span class="math-expr">\\(${g1}\\)</span>`)
                     .replace(/\\\[([\s\S]*?)\\\]/g, (_, g1) => `<span class="math-expr">\\[${g1}\\]</span>`)
