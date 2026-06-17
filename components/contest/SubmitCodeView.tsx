@@ -16,6 +16,7 @@ interface SubmitCodeViewProps {
   problems: ContestProblem[];
   onSuccess: () => void;
   onCancel?: () => void;
+  contestStatus?: string;
 }
 
 const ATCODER_LANGUAGES = [
@@ -35,6 +36,7 @@ export default function SubmitCodeView({
   problems,
   onSuccess,
   onCancel,
+  contestStatus,
 }: SubmitCodeViewProps) {
   const [selectedProblemId, setSelectedProblemId] = useState("");
   const [sourceCode, setSourceCode] = useState("");
@@ -267,7 +269,8 @@ export default function SubmitCodeView({
             <select
               value={selectedProblemId}
               onChange={(e) => setSelectedProblemId(e.target.value)}
-              className="w-full bg-neutral-900 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none transition-colors cursor-pointer"
+              disabled={contestStatus === "finished"}
+              className="w-full bg-neutral-900 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {atcoderProblems.map((p, index) => (
                 <option key={p.id} value={p.id}>
@@ -283,7 +286,8 @@ export default function SubmitCodeView({
             <select
               value={languageId}
               onChange={(e) => setLanguageId(e.target.value)}
-              className="w-full bg-neutral-900 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none transition-colors cursor-pointer"
+              disabled={contestStatus === "finished"}
+              className="w-full bg-neutral-900 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {ATCODER_LANGUAGES.map((l) => (
                 <option key={l.value} value={l.value}>
@@ -301,7 +305,8 @@ export default function SubmitCodeView({
             placeholder="Paste your code here..."
             value={sourceCode}
             onChange={(e) => setSourceCode(e.target.value)}
-            className="w-full h-80 bg-neutral-950 border border-white/10 rounded-2xl p-4 text-sm font-mono text-neutral-200 placeholder:text-neutral-700 focus:border-emerald-400 focus:outline-none transition-colors resize-y"
+            disabled={contestStatus === "finished"}
+            className="w-full h-80 bg-neutral-950 border border-white/10 rounded-2xl p-4 text-sm font-mono text-neutral-200 placeholder:text-neutral-700 focus:border-emerald-400 focus:outline-none transition-colors resize-y disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
 
@@ -358,23 +363,29 @@ export default function SubmitCodeView({
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            type="submit"
-            disabled={submitting || verdictData?.verdict === "AC"}
-            className="w-full bg-emerald-400 hover:bg-emerald-300 text-black font-extrabold text-xs py-3.5 rounded-xl shadow-lg hover:shadow-emerald-400/10 disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            Submit Code Directly
-          </button>
-          <button
-            type="button"
-            onClick={handleSyncLatest}
-            disabled={submitting || verdictData?.verdict === "AC"}
-            className="w-full bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold text-xs py-3.5 rounded-xl border border-white/10 shadow-lg disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-          >
-            🔄 Sync Latest AtCoder Submit
-          </button>
-        </div>
+        {contestStatus === "finished" ? (
+          <div className="text-center py-2.5 px-3 text-xs font-semibold text-red-400 bg-red-950/20 border border-red-900/30 rounded-xl">
+            Contest has ended. Solution submission is disabled.
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="submit"
+              disabled={submitting || verdictData?.verdict === "AC"}
+              className="w-full bg-emerald-400 hover:bg-emerald-300 text-black font-extrabold text-xs py-3.5 rounded-xl shadow-lg hover:shadow-emerald-400/10 disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              Submit Code Directly
+            </button>
+            <button
+              type="button"
+              onClick={handleSyncLatest}
+              disabled={submitting || verdictData?.verdict === "AC"}
+              className="w-full bg-neutral-800 hover:bg-neutral-700 text-white font-extrabold text-xs py-3.5 rounded-xl border border-white/10 shadow-lg disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              🔄 Sync Latest AtCoder Submit
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

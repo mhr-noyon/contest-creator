@@ -16,6 +16,7 @@ interface SubmitViewProps {
   problems: ContestProblem[];
   onSuccess: () => void;
   onCancel?: () => void;
+  contestStatus?: string;
 }
 
 const OJ_LABELS: Record<string, string> = {
@@ -49,6 +50,7 @@ export default function SubmitView({
   problems,
   onSuccess,
   onCancel,
+  contestStatus,
 }: SubmitViewProps) {
   const [selectedProblemId, setSelectedProblemId] = useState("");
   const [submissionIdOrUrl, setSubmissionIdOrUrl] = useState("");
@@ -188,7 +190,8 @@ export default function SubmitView({
           <select
             value={selectedProblemId}
             onChange={(e) => handleProblemChange(e.target.value)}
-            className="w-full bg-neutral-900 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none transition-colors cursor-pointer"
+            disabled={contestStatus === "finished"}
+            className="w-full bg-neutral-900 border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:border-emerald-400 focus:outline-none transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {problems.map((p, index) => (
               <option key={p.id} value={p.id}>
@@ -217,7 +220,8 @@ export default function SubmitView({
             placeholder={OJ_PLACEHOLDERS[selectedOj] ?? "Enter your submission ID or URL"}
             value={submissionIdOrUrl}
             onChange={(e) => setSubmissionIdOrUrl(e.target.value)}
-            className="w-full bg-neutral-900 border border-white/10 rounded-xl px-3 py-2.5 text-sm placeholder:text-neutral-600 focus:border-emerald-400 focus:outline-none transition-colors"
+            disabled={contestStatus === "finished"}
+            className="w-full bg-neutral-900 border border-white/10 rounded-xl px-3 py-2.5 text-sm placeholder:text-neutral-600 focus:border-emerald-400 focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
 
@@ -232,20 +236,26 @@ export default function SubmitView({
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full bg-emerald-400 hover:bg-emerald-300 text-black font-extrabold text-xs py-3 rounded-xl shadow-lg hover:shadow-emerald-400/10 disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-        >
-          {submitting ? (
-            <>
-              <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-              Verifying...
-            </>
-          ) : (
-            `Verify & Sync ${OJ_LABELS[selectedOj] ?? ""} Submission`
-          )}
-        </button>
+        {contestStatus === "finished" ? (
+          <div className="text-center py-2.5 px-3 text-xs font-semibold text-red-400 bg-red-950/20 border border-red-900/30 rounded-xl">
+            Contest has ended. Verification is disabled.
+          </div>
+        ) : (
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full bg-emerald-400 hover:bg-emerald-300 text-black font-extrabold text-xs py-3 rounded-xl shadow-lg hover:shadow-emerald-400/10 disabled:opacity-50 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            {submitting ? (
+              <>
+                <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                Verifying...
+              </>
+            ) : (
+              `Verify & Sync ${OJ_LABELS[selectedOj] ?? ""} Submission`
+            )}
+          </button>
+        )}
       </form>
     </div>
   );
