@@ -58,6 +58,7 @@ export default function ContestPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [startingCountdown, setStartingCountdown] = useState(10);
   const [lobbyCountdown, setLobbyCountdown] = useState<number | null>(null);
+  const [stabilizationRemaining, setStabilizationRemaining] = useState<number | null>(null);
   const [showContestStarted, setShowContestStarted] = useState(false);
   const [syncingSubmissions, setSyncingSubmissions] = useState(false);
 
@@ -499,6 +500,29 @@ export default function ContestPage() {
     }, 1000);
     return () => clearInterval(interval);
   }, [contest?.status]);
+
+  // Tick stabilization remaining timer every second when contest is finished
+  useEffect(() => {
+    if (contest?.status !== "finished") {
+      setStabilizationRemaining(null);
+      return;
+    }
+
+    const tick = () => {
+      const startTime = contest.settings.startTime || contest.createdAt;
+      const duration = (contest.settings.durationMinutes || 0) * 60 * 1000;
+      const endTimeMs = startTime + duration;
+      const deadlineMs = endTimeMs + 20 * 60 * 1000;
+      
+      const adjustedNow = Date.now() - serverOffsetRef.current;
+      const remainingSeconds = Math.max(0, Math.ceil((deadlineMs - adjustedNow) / 1000));
+      setStabilizationRemaining(remainingSeconds);
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [contest?.status, contest?.settings.startTime, contest?.settings.durationMinutes, contest?.createdAt]);
 
   const formattedTime = useMemo(() => {
     const mins = Math.floor(timeLeft / 60);
@@ -1132,13 +1156,26 @@ export default function ContestPage() {
                               </p>
                             )}
                           </div>
-                          <div className="text-right">
+                          <div className="text-right flex flex-col items-end gap-2">
                             {problem.points > 0 && <p className="text-sm font-semibold text-emerald-200">{problem.points} pts</p>}
-                            {solved && <p className="text-xs text-emerald-200 mt-2">Solved</p>}
-                            {!solved && incorrect && <p className="text-xs text-red-300 mt-2">Attempted</p>}
-                            {contest.settings.mode === "blitz" && problem.id === activeProblemId && (
-                              <p className="text-xs text-emerald-200 mt-2">Active</p>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {solved && <span className="text-xs text-emerald-200 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-semibold">Solved</span>}
+                              {!solved && incorrect && <span className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 rounded-full font-semibold">Attempted</span>}
+                              {contest.settings.mode === "blitz" && problem.id === activeProblemId && (
+                                <span className="text-xs text-emerald-200 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-semibold">Active</span>
+                              )}
+                              <a
+                                href={problem.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                className="px-3 py-1.5 rounded-xl border border-white/10 hover:border-white/20 bg-neutral-900 hover:bg-neutral-850 text-neutral-300 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                🌐 Open at {problem.oj === "atcoder" ? "AtCoder" : "Codeforces"}
+                              </a>
+                            </div>
                           </div>
                         </div>
                       </a>
@@ -1192,6 +1229,26 @@ export default function ContestPage() {
             </div>
             
             <div className="mt-6">
+              {contest.status === "finished" && (
+                stabilizationRemaining !== null && stabilizationRemaining > 0 ? (
+                  <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-amber-300 text-sm font-semibold flex items-center gap-3 animate-pulse">
+                    <span>⏳</span>
+                    <span>
+                      Not final standings. The ranklist will be finalized in{" "}
+                      <span className="font-mono text-white">
+                        {Math.floor(stabilizationRemaining / 60)}:
+                        {(stabilizationRemaining % 60).toString().padStart(2, "0")}
+                      </span>{" "}
+                      minutes to allow for late/wrong submission sync.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mb-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-emerald-300 text-sm font-semibold flex items-center gap-3">
+                    <span>✅</span>
+                    <span>These are the final standings.</span>
+                  </div>
+                )
+              )}
               {scoreboard ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-[800px] w-full text-left text-sm border-collapse">
@@ -1458,6 +1515,7 @@ export default function ContestPage() {
             displayName={joinName}
             initialProblemId={submitInitialProblemId}
             problems={contest.problems}
+            contestStatus={contest.status}
             onSuccess={() => {
               setSubmitInitialProblemId(null);
               handleTabChange("leaderboard");
@@ -1475,6 +1533,7 @@ export default function ContestPage() {
             displayName={joinName}
             initialProblemId={submitInitialProblemId}
             problems={contest.problems}
+            contestStatus={contest.status}
             onSuccess={() => {
               setSubmitInitialProblemId(null);
               triggerSync("manual");
